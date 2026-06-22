@@ -96,19 +96,6 @@ CREATE TABLE IF NOT EXISTS "saved_locations" (
   "created_at" timestamp NOT NULL DEFAULT now()
 );
 
-ALTER TABLE "ratings" ADD COLUMN IF NOT EXISTS "comment" text;
-
-ALTER TABLE "driver_details" ADD COLUMN IF NOT EXISTS "is_legacy_driver" boolean NOT NULL DEFAULT false;
-
--- One-time backfill: any driver who has no docs yet is a legacy driver
--- (registered before the document upload feature was added).
--- ON CONFLICT DO NOTHING prevents double-runs from failing.
-UPDATE "driver_details"
-SET "is_legacy_driver" = true
-WHERE "truck_front_photo_url" IS NULL
-  AND "driver_license_url" IS NULL
-  AND "is_legacy_driver" = false;
-
 CREATE TABLE IF NOT EXISTS "announcement_reads" (
   "id"              text      PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
   "announcement_id" text      NOT NULL,
@@ -119,15 +106,64 @@ CREATE TABLE IF NOT EXISTS "announcement_reads" (
 );
 
 CREATE TABLE IF NOT EXISTS "support_messages" (
-  "id"         text      PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
-  "user_id"    text,
-  "message"    text      NOT NULL,
-  "status"     text      NOT NULL DEFAULT 'pending',
-  "created_at" timestamp NOT NULL DEFAULT now()
+  "id"          text      PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
+  "user_id"     text,
+  "message"     text      NOT NULL,
+  "sender_type" text      NOT NULL DEFAULT 'user',
+  "admin_id"    text,
+  "status"      text      NOT NULL DEFAULT 'pending',
+  "created_at"  timestamp NOT NULL DEFAULT now()
 );
 
--- Supabase migration: users table was originally created without created_at
-ALTER TABLE "users" ADD COLUMN IF NOT EXISTS "created_at" timestamp;
+CREATE TABLE IF NOT EXISTS "user_devices" (
+  "id"           text      PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
+  "user_id"      text      NOT NULL,
+  "device_id"    text      NOT NULL,
+  "device_label" text      NOT NULL DEFAULT '',
+  "first_seen_at" timestamp NOT NULL DEFAULT now(),
+  "last_seen_at"  timestamp NOT NULL DEFAULT now()
+);
+
+CREATE TABLE IF NOT EXISTS "driver_appeals" (
+  "id"             text      PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
+  "driver_id"      text      NOT NULL,
+  "message"        text      NOT NULL,
+  "status"         text      NOT NULL DEFAULT 'pending',
+  "admin_response" text,
+  "created_at"     timestamp NOT NULL DEFAULT now(),
+  "reviewed_at"    timestamp
+);
+
+CREATE TABLE IF NOT EXISTS "push_subscriptions" (
+  "id"           text      PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
+  "user_id"      text      NOT NULL,
+  "subscription" jsonb     NOT NULL,
+  "created_at"   timestamp NOT NULL DEFAULT now(),
+  "updated_at"   timestamp NOT NULL DEFAULT now()
+);
+
+-- ── Additive column migrations (always safe to re-run) ─────────────────────
+
+ALTER TABLE "ratings"        ADD COLUMN IF NOT EXISTS "comment" text;
+
+ALTER TABLE "driver_details" ADD COLUMN IF NOT EXISTS "is_legacy_driver"  boolean NOT NULL DEFAULT false;
+ALTER TABLE "driver_details" ADD COLUMN IF NOT EXISTS "trial_granted_at"  timestamp;
+
+-- One-time backfill: any driver who has no docs yet is a legacy driver
+-- (registered before the document upload feature was added).
+-- ON CONFLICT DO NOTHING prevents double-runs from failing.
+UPDATE "driver_details"
+SET "is_legacy_driver" = true
+WHERE "truck_front_photo_url" IS NULL
+  AND "driver_license_url" IS NULL
+  AND "is_legacy_driver" = false;
+
+ALTER TABLE "users" ADD COLUMN IF NOT EXISTS "created_at"              timestamp;
+ALTER TABLE "users" ADD COLUMN IF NOT EXISTS "first_approval_granted"  boolean NOT NULL DEFAULT false;
+
+-- Support chat: two-way conversation between users and admin
+ALTER TABLE "support_messages" ADD COLUMN IF NOT EXISTS "sender_type" text NOT NULL DEFAULT 'user';
+ALTER TABLE "support_messages" ADD COLUMN IF NOT EXISTS "admin_id"    text;
 `;
 
 export async function runMigrations(): Promise<void> {
