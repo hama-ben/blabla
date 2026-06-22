@@ -16,6 +16,7 @@ import { useLocation } from "wouter";
 import { ThemeProvider } from "@/lib/theme";
 import { I18nProvider } from "@/lib/i18n";
 import { usePushSubscription } from "@/hooks/use-push-subscription";
+import { useTokenRefresh } from "@/hooks/use-token-refresh";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Global session-eviction listener
@@ -48,6 +49,15 @@ function PushSubscriptionGate() {
   const userType = useAuth((s) => s.userType);
   // Only subscribe drivers — they are the ones receiving order push alerts
   usePushSubscription(userType === "سائق" ? userId : null);
+  return null;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Token refresh gate — proactively refreshes the Supabase JWT before it
+// expires and auto-retries on 401 via customFetch.
+// ─────────────────────────────────────────────────────────────────────────────
+function TokenRefreshGate() {
+  useTokenRefresh();
   return null;
 }
 
@@ -92,6 +102,7 @@ function App() {
           <TooltipProvider>
             <WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, "")}>
               <SessionEvictionGuard />
+              <TokenRefreshGate />
               <PushSubscriptionGate />
               <Router />
             </WouterRouter>

@@ -22,6 +22,18 @@ let _userIdGetter: (() => string | null) | null = null;
 let _deviceIdGetter: (() => string | null) | null = null;
 
 /**
+ * Register a callback invoked on 401 responses.
+ * It should attempt a token refresh and return the new access token, or null
+ * if the session cannot be recovered (the original 401 error is then thrown).
+ * After a successful refresh the failed request is retried exactly once.
+ */
+let _tokenRefresher: (() => Promise<string | null>) | null = null;
+
+export function setTokenRefresher(fn: (() => Promise<string | null>) | null): void {
+  _tokenRefresher = fn;
+}
+
+/**
  * Register a getter that supplies a persistent device identifier.
  * When set, every request will include an `X-Device-Id` header used for
  * enforcing the per-account device limit.
@@ -227,95 +239,28 @@ export class ApiError<T = unknown> extends Error {
   }
 }
 
-export class ResponseParseError extends Error {
-  readonly name = "ResponseParseError";
-  readonly status: number;
-  readonly statusText: string;
-  readonly headers: Headers;
-  readonly response: Response;
-  readonly method: string;
-  readonly url: string;
-  readonly rawBody: string;
-  readonly cause: unknown;
+async function parseErrorBody(response: Response, method: string): Promise<unknown> {
+  if (hasNoBody(response, method)) return null;
 
-  constructor(
-    response: Response,
-    rawBody: string,
-    cause: unknown,
-    requestInfo: { method: string; url: string },
-  ) {
-    super(
-      `Failed to parse response from ${requestInfo.method} ${response.url || requestInfo.url} ` +
-        `(${response.status} ${response.statusText}) as JSON`,
-    );
-    Object.setPrototypeOf(this, new.target.prototype);
-
-    this.status = response.status;
-    this.statusText = response.statusText;
-    this.headers = response.headers;
-    this.response = response;
-    this.method = requestInfo.method;
-    this.url = response.url || requestInfo.url;
-    this.rawBody = rawBody;
-    this.cause = cause;
-  }
-}
-
-async function parseJsonBody(
-  response: Response,
-  requestInfo: { method: string; url: string },
-): Promise<unknown> {
-  const raw = await response.text();
-  const normalized = stripBom(raw);
-
-  if (normalized.trim() === "") {
-    return null;
-  }
+  const mediaType = getMediaType(response.headers);
 
   try {
-    return JSON.parse(normalized);
-  } catch (cause) {
-    throw new ResponseParseError(response, raw, cause, requestInfo);
-  }
-}
-
-async function parseErrorBody(response: Response, method: string): Promise<unknown> {
-  if (hasNoBody(response, method)) {
-    return null;
-  }
-
-  const mediaType = getMediaType(response.headers);
-
-  // Fall back to text when blob() is unavailable (e.g. some React Native builds).
-  if (mediaType && !isJsonMediaType(mediaType) && !isTextMediaType(mediaType)) {
-    return typeof response.blob === "function" ? response.blob() : response.text();
-  }
-
-  const raw = await response.text();
-  const normalized = stripBom(raw);
-  const trimmed = normalized.trim();
-
-  if (trimmed === "") {
-    return null;
-  }
-
-  if (isJsonMediaType(mediaType) || looksLikeJson(normalized)) {
-    try {
-      return JSON.parse(normalized);
-    } catch {
-      return raw;
+    if (isJsonMediaType(mediaType)) {
+      return await response.json();
     }
+
+    const text = stripBom(await response.text());
+    if (looksLikeJson(text)) {
+      try {
+        return JSON.parse(text);
+      } catch {
+        return text;
+      }
+    }
+    return text || null;
+  } catch {
+    return null;
   }
-
-  return raw;
-}
-
-function inferResponseType(response: Response): "json" | "text" | "blob" {
-  const mediaType = getMediaType(response.headers);
-
-  if (isJsonMediaType(mediaType)) return "json";
-  if (isTextMediaType(mediaType) || mediaType == null) return "text";
-  return "blob";
 }
 
 async function parseSuccessBody(
@@ -323,20 +268,38 @@ async function parseSuccessBody(
   responseType: "json" | "text" | "blob" | "auto",
   requestInfo: { method: string; url: string },
 ): Promise<unknown> {
-  if (hasNoBody(response, requestInfo.method)) {
-    return null;
-  }
+  if (hasNoBody(response, requestInfo.method)) return undefined;
 
-  const effectiveType =
-    responseType === "auto" ? inferResponseType(response) : responseType;
-
-  switch (effectiveType) {
+  switch (responseType) {
     case "json":
-      return parseJsonBody(response, requestInfo);
+      return response.json();
 
-    case "text": {
-      const text = await response.text();
-      return text === "" ? null : text;
+    case "text":
+      return stripBom(await response.text());
+
+    case "auto": {
+      const mediaType = getMediaType(response.headers);
+
+      if (isJsonMediaType(mediaType)) {
+        return response.json();
+      }
+
+      if (isTextMediaType(mediaType)) {
+        return stripBom(await response.text());
+      }
+
+      const text = stripBom(await response.text());
+      if (text === "") return undefined;
+
+      if (looksLikeJson(text)) {
+        try {
+          return JSON.parse(text);
+        } catch {
+          return text;
+        }
+      }
+
+      return text;
     }
 
     case "blob":
@@ -413,6 +376,20 @@ export async function customFetch<T = unknown>(
   const requestInfo = { method, url: resolveUrl(input) };
 
   const response = await fetch(input, { ...init, method, headers });
+
+  // ── 401 → attempt token refresh then retry once ───────────────────────────
+  if (response.status === 401 && _tokenRefresher) {
+    const newToken = await _tokenRefresher();
+    if (newToken) {
+      headers.set("authorization", `Bearer ${newToken}`);
+      const retryResponse = await fetch(input, { ...init, method, headers });
+      if (!retryResponse.ok) {
+        const errorData = await parseErrorBody(retryResponse, method);
+        throw new ApiError(retryResponse, errorData, requestInfo);
+      }
+      return (await parseSuccessBody(retryResponse, responseType, requestInfo)) as T;
+    }
+  }
 
   if (!response.ok) {
     const errorData = await parseErrorBody(response, method);

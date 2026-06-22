@@ -40,7 +40,7 @@ async function subscribe(userId: string): Promise<void> {
   // 3. Subscribe to push
   const pushSub = await reg.pushManager.subscribe({
     userVisibleOnly: true,
-    applicationServerKey: urlBase64ToUint8Array(vapidKey),
+    applicationServerKey: new Uint8Array(urlBase64ToUint8Array(vapidKey)),
   });
 
   // 4. Send subscription to server

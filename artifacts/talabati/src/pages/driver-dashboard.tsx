@@ -91,16 +91,10 @@ function RejectedAccountOverlay() {
   // Load existing appeal on mount
   useEffect(() => {
     if (!userId) return;
-    customFetch(`/driver/appeal`)
-      .then(async (r) => {
-        if (!r.ok) { setAppealStatus("idle"); return; }
-        const data = await r.json() as { status: string } | null;
-        if (data) {
-          setExistingAppeal(data);
-          setAppealStatus("idle");
-        } else {
-          setAppealStatus("idle");
-        }
+    customFetch<{ status: string } | null>(`/driver/appeal`)
+      .then((data) => {
+        if (data) setExistingAppeal(data);
+        setAppealStatus("idle");
       })
       .catch(() => setAppealStatus("idle"));
   }, [userId]);
@@ -110,21 +104,16 @@ function RejectedAccountOverlay() {
     setAppealError("");
     setAppealStatus("submitting");
     try {
-      const r = await customFetch(`/driver/appeal`, {
+      await customFetch(`/driver/appeal`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ message: appealText.trim() }),
       });
-      if (!r.ok) {
-        const d = await r.json() as { error?: string };
-        setAppealError(d.error ?? "حدث خطأ");
-        setAppealStatus("form");
-        return;
-      }
       setExistingAppeal({ status: "pending" });
       setAppealStatus("done");
-    } catch {
-      setAppealError("تعذّر الاتصال بالخادم");
+    } catch (err: unknown) {
+      const apiErr = err as { data?: { error?: string } } | null;
+      setAppealError(apiErr?.data?.error ?? "تعذّر الاتصال بالخادم");
       setAppealStatus("form");
     }
   };
@@ -173,7 +162,10 @@ function RejectedAccountOverlay() {
           )}
         </div>
 
-        {/* Appeal form */}
+        {/* Appeal form — only rendered when status is "form"; the form is
+            hidden entirely while submitting, so disabled/loading inside here
+            is always false/static. TypeScript narrows appealStatus to "form"
+            in this block which is correct — no "submitting" check needed. */}
         {appealStatus === "form" && (
           <div className="mb-4 text-right space-y-3">
             <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300">
@@ -192,12 +184,9 @@ function RejectedAccountOverlay() {
             <div className="flex gap-2">
               <button
                 onClick={submitAppeal}
-                disabled={appealStatus === "submitting"}
                 className="flex-1 flex items-center justify-center gap-2 bg-gradient-to-r from-primary to-cyan-500 text-white font-bold py-3 rounded-2xl text-sm shadow-lg hover:opacity-90 transition-all active:scale-[0.98] disabled:opacity-50"
               >
-                {appealStatus === "submitting"
-                  ? <><Loader2 className="w-4 h-4 animate-spin" /> جارٍ الإرسال...</>
-                  : <><Send className="w-4 h-4" /> إرسال الطعن</>}
+                <Send className="w-4 h-4" /> إرسال الطعن
               </button>
               <button
                 onClick={() => { setAppealStatus("idle"); setAppealError(""); }}

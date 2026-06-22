@@ -425,6 +425,41 @@ router.post("/auth/login", async (req, res): Promise<void> => {
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
+// Token refresh — exchange an expired access token for a fresh session pair.
+// This is a public route (called when the access token has already expired).
+// Supabase's refresh_token grant is used — the old refresh token is rotated
+// (Supabase invalidates it after use, so the response contains a new one).
+// ─────────────────────────────────────────────────────────────────────────────
+router.post("/auth/refresh", async (req, res): Promise<void> => {
+  const { refreshToken } = req.body as { refreshToken?: string };
+  if (!refreshToken || typeof refreshToken !== "string") {
+    res.status(400).json({ error: "refreshToken مطلوب" });
+    return;
+  }
+
+  const supabase = getSupabaseAuth();
+  if (!supabase) {
+    res.status(503).json({ error: "خدمة المصادقة غير متاحة — يرجى التحقق من إعداد Supabase" });
+    return;
+  }
+
+  const { data, error } = await supabase.auth.refreshSession({ refresh_token: refreshToken });
+
+  if (error || !data.session) {
+    req.log.warn({ err: error?.message }, "auth/refresh: Supabase refresh failed");
+    res.status(401).json({ error: "انتهت صلاحية الجلسة، يرجى تسجيل الدخول مجدداً" });
+    return;
+  }
+
+  req.log.info({ userId: data.session.user.id }, "✅ Session refreshed");
+
+  res.json({
+    sessionToken: data.session.access_token,
+    refreshToken: data.session.refresh_token,
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
 // Logout — Supabase sessions are JWT-based; client discards the token.
 // Server-side sign-out revokes the refresh token on Supabase's side.
 // ─────────────────────────────────────────────────────────────────────────────
