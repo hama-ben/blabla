@@ -1,0 +1,37 @@
+I need to fix the routing behavior, authentication loading states, configure our Supabase environment variables, and implement a direct file upload flow to my existing Supabase Storage bucket. Please combine and apply these exact instructions carefully:
+
+⚠️ CRITICAL PRESERVATION RULE: 
+Absolutely DO NOT touch, modify, or break the per-driver dashboard statistics queries or logic. Keep the `driver_id` database filtering for stats exactly as it currently is.
+
+═══════════════════════════════════════════════════════════════
+## PART 1 — ENVIRONMENT CONFIGURATION (SUPABASE CREDENTIALS)
+═══════════════════════════════════════════════════════════════
+Please ensure the application is fully configured to use the following project credentials. Update your configuration environment (or initialize them in the proper configuration files like `.env`) using these exact production values:
+- **SUPABASE_URL / VITE_SUPABASE_URL:** `https://aeoyteruvcxqimwusrey.supabase.co`
+- **SUPABASE_ANON_KEY / VITE_SUPABASE_ANON_KEY:** `eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFlb3l0ZXJ1dmN4cWltd3VzcmV5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODA0MjM3ODUsImV4cCI6MjA5NTk5OTc4NX0.vi9Chq9WgzSKEKz50EHJyaKnPtBRi1MvIjdtlePJHH8`
+- **SUPABASE_SERVICE_ROLE_KEY:** `eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFlb3l0ZXJ1dmN4cWltd3VzcmV5Iiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc4MDQyMzc4NSwiZXhwIjoyMDk1OTk5Nzg1fQ.HO3XM8toqKFl1H1uyNrNhHPwurluTvLu2V7vo7fQS-8`
+- **DATABASE_URL:** `postgresql://postgres.aeoyteruvcxqimwusrey:hama123hama@aws-0-eu-west-1.pooler.supabase.com:6543/postgres`
+
+Initialize or update the frontend client instance and the backend server database connection pool using these specific keys to ensure proper handshake.
+
+═══════════════════════════════════════════════════════════════
+## PART 2 — FIX: Login Routing & Bypassing Upload Page
+═══════════════════════════════════════════════════════════════
+- When an existing driver logs in using the standard login form (from the login screen), the system must route them DIRECTLY to `/driver-dashboard`.
+- Ensure that the login flow completely bypasses any document check guards or middleware redirects to `/driver-upload-docs` for returning or legacy drivers. They should never see the upload page again.
+
+═══════════════════════════════════════════════════════════════
+## PART 3 — FIX: The "يجب تسجيل الدخول أولاً" Timing Bug (Race Condition)
+═══════════════════════════════════════════════════════════════
+- On the `/driver-upload-docs` page (for new registrations) and on the `/driver-dashboard` page (right after login redirection), the app currently flashes the red error message "يجب تسجيل الدخول أولاً" (You must log in first). This happens because it evaluates the user session before Supabase auth is fully initialized.
+- **The Fix:** Wrap these pages/guards in a proper auth `isLoading` (or `loading`) state check. 
+- While `isLoading` is true (waiting for the session to hydrate from localStorage/Supabase), DO NOT render any error text or execute unauthorized redirects. Instead, display a clean loading spinner or an empty skeleton UI.
+- In `login.tsx` and `register.tsx`, ensure the submission functions fully `await` the session hydration before executing the router push.
+
+═══════════════════════════════════════════════════════════════
+## PART 4 — IMPLEMENT: Direct Upload to Supabase Storage Bucket
+═══════════════════════════════════════════════════════════════
+- For new drivers on the `/driver-upload-docs` page, set up the file upload logic for both fields: "صورة الشاحنة من الأمام" (Front Truck Photo) and "صورة رخصة القيادة" (Driving License).
+- When a driver selects files, upload them directly to my existing Supabase Storage bucket named `driver-documents`. Ensure it utilizes the authenticated Supabase client instance.
+- **Save URLs to DB:** Once the files are successfully uploaded to the storage bucket, grab their public URLs and save them into the user's database record (`truck_front_photo_url` and `driver_license_url`), then update `documents_uploaded = true`.
+- As soon as the database updates successfully, seamlessly redirect the driver straight to `/driver-dashboard`.

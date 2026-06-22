@@ -1,0 +1,95 @@
+Fix two critical bugs in the driver document upload system:
+
+═══════════════════════════════════════════════════════
+## BUG 1 — Old/existing drivers forced to upload documents
+═══════════════════════════════════════════════════════
+
+Drivers who had active accounts BEFORE the document upload 
+system was added are being redirected to /driver-upload-docs 
+even though they are already verified and active.
+
+### Root cause:
+The documents check looks at documents_uploaded = false/null,
+but old drivers never had this field set — it defaults to null.
+The system treats null the same as "not uploaded" which is wrong
+for drivers who registered before this feature existed.
+
+### Required fix:
+Add a new field to driver_profiles table:
+  is_legacy_driver: boolean (default: false)
+
+For all existing drivers in the database who registered 
+BEFORE today's date, run a one-time migration:
+  UPDATE driver_profiles 
+  SET is_legacy_driver = true, documents_uploaded = true
+  WHERE created_at < [date when document upload feature was added]
+  OR (truck_front_photo_url IS NULL AND driver_license_url IS NULL 
+      AND created_at < NOW())
+
+In the login guard and dashboard guard, skip the document 
+check entirely if is_legacy_driver = true:
+
+  if (driver.is_legacy_driver || driver.documents_uploaded) {
+    → allow dashboard access ✅
+  } else {
+    → redirect to /driver-upload-docs ❌
+  }
+
+This means:
+✅ Old drivers (legacy) → enter dashboard directly, no upload needed
+✅ New drivers with docs uploaded → enter dashboard directly  
+❌ New drivers without docs → redirected to upload page
+
+═══════════════════════════════════════════════════════
+## BUG 2 — Upload page shows "login required" error in red
+═══════════════════════════════════════════════════════
+
+When a driver on /driver-upload-docs tries to upload their 
+documents, a red error appears saying login is required.
+
+### Root cause:
+The upload API endpoint requires a full authenticated session,
+but new drivers coming from registration do not have one yet.
+The page is not correctly passing the temporary registration 
+token to the upload request.
+
+### Required fix:
+
+1 - After registration, store the driver session temporarily:
+  localStorage.setItem('driver_temp_session', JSON.stringify({
+    driverId: newDriver.id,
+    token: registrationToken,
+    isTemp: true
+  }))
+
+2 - In /driver-upload-docs, read auth from TWO sources:
+  const session = 
+    regularAuthSession ||  // returning driver already logged in
+    JSON.parse(localStorage.getItem('driver_temp_session'))  // new driver
+
+3 - The upload API endpoint must accept BOTH token types:
+  * Regular session token (returning drivers)
+  * Temporary registration token (new drivers just registered)
+
+  In the endpoint auth middleware:
+    - First try to validate as regular session
+    - If that fails, try to validate as temp registration token
+    - If both fail → return 401 "login required" error
+
+4 - After successful upload:
+  * Save both URLs to database
+  * Set documents_uploaded = true
+  * Clear the temp session: localStorage.removeItem('driver_temp_session')
+  * Create a full regular session for the driver
+  * Redirect to /driver-dashboard
+
+═══════════════════════════════════════════════════════
+## AFTER FIXING — Test these scenarios:
+═══════════════════════════════════════════════════════
+
+✅ Old driver (registered before feature) logs in → dashboard directly
+✅ Old driver never sees /driver-upload-docs page
+✅ New driver registers → upload page → uploads both docs → dashboard
+✅ New driver on upload page → no red error when uploading
+✅ New driver skips upload → logs in later → upload page (with no error)
+✅ New driver with docs already uploaded → logs in → dashboard directly

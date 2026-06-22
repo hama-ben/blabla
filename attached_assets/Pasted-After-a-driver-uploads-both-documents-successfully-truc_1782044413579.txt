@@ -1,0 +1,77 @@
+After a driver uploads both documents successfully (truck photo + 
+license) on the upload page, before navigating to the subscription 
+selection page (the "مرحباً محمد" screen with trial/payment options), 
+show a confirmation popup/modal first.
+
+═══════════════════════════════════════════════════════════════
+## STEP 1 — Show confirmation modal immediately after upload submit
+═══════════════════════════════════════════════════════════════
+
+When the driver clicks "إرسال الوثائق وتفعيل الحساب" and the upload 
+succeeds, show a modal (before navigating anywhere) with:
+
+- Title: "🎉 مرحباً بك في مجتمعنا"
+- Message: "تم إرسال ملفك إلى جهة الإدارة لمعاينتها. لقد منحناك 
+  3 أيام تجريبية حتى تتم الموافقة على ملفك."
+- A visual countdown/badge showing "3 أيام" remaining
+- A button: "حسناً، متابعة"
+
+═══════════════════════════════════════════════════════════════
+## STEP 2 — Grant a 3-day trial period immediately upon submission
+═══════════════════════════════════════════════════════════════
+
+When documents are submitted (not yet approved by admin):
+- Set `account_status = 'pending'` (as already happens)
+- ALSO set `subscription_expires_at = NOW() + 3 days` so the driver 
+  can use the app fully during this trial window while waiting 
+  for admin review — this is separate from the existing 30-day 
+  paid subscription logic, this is a one-time 3-day grace period 
+  specifically for new pending drivers
+
+If a `trial_granted_at` or similar tracking column doesn't exist, 
+add one to `driver_details` or `users` to ensure this 3-day trial 
+is only ever granted ONCE per driver (not re-granted if they 
+resubmit documents after a rejection).
+
+═══════════════════════════════════════════════════════════════
+## STEP 3 — After clicking "حسناً، متابعة"
+═══════════════════════════════════════════════════════════════
+
+Navigate the driver to the dashboard (driver-dashboard) — they can 
+use the app normally during the 3-day trial, even while pending 
+admin approval. Do NOT show the subscription selection screen 
+("مرحباً محمد" with trial/payment cards) right after document 
+upload — that screen should only appear later, when the 3-day 
+trial or subsequent subscription actually expires.
+
+═══════════════════════════════════════════════════════════════
+## STEP 4 — Confirm existing admin flow stays correct
+═══════════════════════════════════════════════════════════════
+
+Confirm (no changes needed if already correct, per the screenshots 
+you showed me):
+- driver_details row appears correctly in Supabase ✅ (already working)
+- Admin Driver Queue shows the pending driver with documents ✅ 
+  (already working)
+- On admin "Approve": account_status = 'approved', driver keeps 
+  using the app normally (their subscription_expires_at trial 
+  continues counting down, or admin approval could optionally 
+  also extend it — your call, default to NOT touching the 
+  trial countdown on approval, just changing account_status)
+- On admin "Reject": account_status = 'rejected', driver sees 
+  the rejection modal we already built (Facebook contact link), 
+  and the driver should now appear in the "Rejected Drivers" 
+  page if that page is already implemented — confirm it is
+
+═══════════════════════════════════════════════════════════════
+## Test after implementing:
+═══════════════════════════════════════════════════════════════
+✅ Upload both documents → confirmation modal appears with the 
+   exact Arabic text above and "3 أيام" countdown badge
+✅ Click "حسناً، متابعة" → goes to driver-dashboard (not subscription 
+   selection screen)
+✅ Driver can use the app fully during the 3 days while pending
+✅ Admin Driver Queue still shows them as pending
+✅ subscription_expires_at is set correctly to 3 days from now
+✅ This 3-day grant happens only once — resubmitting after 
+   rejection doesn't reset it again

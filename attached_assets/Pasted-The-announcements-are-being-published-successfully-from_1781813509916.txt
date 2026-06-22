@@ -1,0 +1,121 @@
+The announcements are being published successfully from the admin panel 
+and saved to Supabase, but they are NOT showing up in the driver or 
+customer bell notification panel.
+
+Please debug and fix this step by step:
+
+═══════════════════════════════════════════════════════════════
+## STEP 1 — Verify data exists in Supabase
+═══════════════════════════════════════════════════════════════
+
+First run this SQL in Supabase SQL Editor to confirm announcements exist:
+
+  SELECT * FROM announcements ORDER BY created_at DESC LIMIT 10;
+
+Show me the result — what columns exist and what data is there?
+
+═══════════════════════════════════════════════════════════════
+## STEP 2 — Find the exact column names
+═══════════════════════════════════════════════════════════════
+
+Run this to get the EXACT column names:
+
+  SELECT column_name, data_type 
+  FROM information_schema.columns 
+  WHERE table_name = 'announcements';
+
+Then compare these column names with what the driver/customer 
+frontend code is querying. They must match EXACTLY.
+
+═══════════════════════════════════════════════════════════════
+## STEP 3 — Check the fetch query in driver/customer code
+═══════════════════════════════════════════════════════════════
+
+Find where announcements are fetched in:
+- Driver dashboard code (useAnnouncements hook or similar)
+- Customer app code (same hook or separate)
+
+Check:
+- Is the table name correct? (matches Supabase exactly)
+- Are the column names correct? (matches Supabase exactly)
+- Is there a filter like WHERE is_active = true that might 
+  be filtering everything out? If is_active column does not 
+  exist → remove that filter
+- Is there a filter by target_audience that might not match?
+  If target_audience column exists, make sure the filter 
+  accepts 'everyone' or 'all' or whatever value admin sends
+
+═══════════════════════════════════════════════════════════════
+## STEP 4 — Check RLS (Row Level Security)
+═══════════════════════════════════════════════════════════════
+
+Run this SQL to see current RLS policies on announcements:
+
+  SELECT policyname, cmd, qual, with_check 
+  FROM pg_policies 
+  WHERE tablename = 'announcements';
+
+Make sure there is a SELECT policy that allows authenticated 
+users (drivers and customers) to read announcements:
+
+  CREATE POLICY "allow_select" ON announcements
+  FOR SELECT TO authenticated
+  USING (true);
+
+Without this policy, drivers and customers cannot read 
+any announcements even if they exist.
+
+═══════════════════════════════════════════════════════════════
+## STEP 5 — Add console logging to debug
+═══════════════════════════════════════════════════════════════
+
+In the useAnnouncements hook (or wherever announcements are fetched),
+add temporary console.log to see what is happening:
+
+  console.log('Fetching announcements...');
+  const { data, error } = await supabase
+    .from('announcements')
+    .select('*')
+  console.log('Announcements data:', data);
+  console.log('Announcements error:', error);
+
+Then open browser DevTools → Console tab and check:
+- Is data null or empty array []?
+- Is there an error message?
+- Is the query even running?
+
+═══════════════════════════════════════════════════════════════
+## STEP 6 — Fix based on findings
+═══════════════════════════════════════════════════════════════
+
+Based on what you find in steps 1-5, apply the fix:
+
+Case A — Query returns error about column not found:
+  → Update column names in the frontend to match Supabase exactly
+
+Case B — Query returns empty array but data exists in Supabase:
+  → There is a WHERE filter blocking results — remove or fix it
+
+Case C — RLS blocks the read:
+  → Add SELECT policy as shown in Step 4
+
+Case D — Query never runs (not called on component mount):
+  → Make sure useAnnouncements is called in both 
+    driver-dashboard.tsx AND customer dashboard component
+  → Make sure the bell icon component is actually mounted
+
+Case E — Data fetched but not displayed:
+  → Check the rendering logic — maybe announcements array 
+    is mapped but the column name used in JSX is wrong
+    e.g. {announcement.message} but column is actually 'content'
+
+═══════════════════════════════════════════════════════════════
+## STEP 7 — Verify fix works on both sides
+═══════════════════════════════════════════════════════════════
+
+After fixing:
+✅ Driver clicks bell → sees the announcement
+✅ Customer clicks bell → sees the announcement  
+✅ Badge count shows correct number of unread announcements
+✅ After opening panel → badge resets to 0
+✅ New announcement from admin → appears in real time

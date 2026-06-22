@@ -1,0 +1,77 @@
+Implement order acceptance limits and a live counter for available orders.
+
+═══════════════════════════════════════════════════════════════
+## RULE 1 — Driver can accept maximum 2 orders at the same time
+═══════════════════════════════════════════════════════════════
+
+When a driver tries to accept a new order from "الطلبات المتاحة":
+- Check how many orders this driver currently has with 
+  status = 'قيد التوصيل' (in delivery, not yet completed)
+- If count >= 2: 
+  * Disable the "قبول" button on all other available orders
+  * Show a message: "لا يمكنك قبول طلبات جديدة، لديك طلبين قيد التوصيل"
+- If count < 2: allow accepting a new order normally
+
+═══════════════════════════════════════════════════════════════
+## RULE 2 — Once accepted, driver CANNOT reject/cancel the order
+═══════════════════════════════════════════════════════════════
+
+After a driver accepts an order (status becomes 'قيد التوصيل'):
+- Remove or disable any "رفض"/cancel button for that specific order 
+  on the driver's side
+- The driver must deliver it — the only way this order leaves their 
+  list is by marking it as delivered/completed
+- (Customer-side cancellation, if it exists, is a separate flow and 
+  is not affected by this rule)
+
+═══════════════════════════════════════════════════════════════
+## RULE 3 — Completing delivery frees up a slot
+═══════════════════════════════════════════════════════════════
+
+When the driver confirms delivery (status changes to 'تم التوصيل' / 
+'مكتمل') for one of their orders:
+- That order is removed from their active count
+- Their active orders count decreases by 1 (e.g. from 2 → 1)
+- This automatically allows them to accept 1 more order again 
+  (re-enable "قبول" buttons if they were disabled due to the limit)
+
+═══════════════════════════════════════════════════════════════
+## RULE 4 — Live counter next to "الطلبات المتاحة"
+═══════════════════════════════════════════════════════════════
+
+Add a live updating number/badge next to the "الطلبات المتاحة" 
+heading showing how many orders are currently available 
+(status = 'معلق'/pending, not yet assigned to any driver) for today.
+
+Requirements:
+- Counter must update in real time using Supabase realtime 
+  subscription on the orders table (INSERT/UPDATE/DELETE events)
+- No page refresh needed — counter updates live as orders are 
+  created, accepted by other drivers, or expire
+- Style: small circular badge with the number, next to the heading, 
+  similar style to the existing bell notification badge
+
+Example: "الطلبات المتاحة (3)" or a badge showing "3" next to the title
+
+═══════════════════════════════════════════════════════════════
+## Database check
+═══════════════════════════════════════════════════════════════
+
+Before implementing, verify the exact column/values used for order 
+status in the orders table:
+
+  SELECT DISTINCT status FROM orders;
+
+Use the exact status strings that exist (e.g. 'قيد التوصيل', 
+'معلق', 'تم التوصيل') — do not assume.
+
+═══════════════════════════════════════════════════════════════
+## Test after implementing:
+═══════════════════════════════════════════════════════════════
+✅ Driver with 0 active orders can accept a new order
+✅ Driver with 1 active order can accept one more (total 2)
+✅ Driver with 2 active orders sees "قبول" disabled on all others
+✅ Driver cannot reject/cancel an order after accepting it
+✅ Completing one of 2 active orders frees a slot, "قبول" re-enables
+✅ "الطلبات المتاحة" counter updates live without refresh as orders 
+   change status

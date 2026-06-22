@@ -1,0 +1,52 @@
+After switching to SUPABASE_DB_URL, registration now fails at the 
+OTP verification step with "خطأ داخلي في الخادم" (internal server 
+error). I tried registering a new test driver and got stuck here.
+
+Please debug:
+
+═══════════════════════════════════════════════════════════════
+## STEP 1 — Show me the actual server error
+═══════════════════════════════════════════════════════════════
+
+Check the server logs/console right now for the exact error that 
+occurred when the OTP request was made. Show me the full stack 
+trace, not just "internal server error".
+
+═══════════════════════════════════════════════════════════════
+## STEP 2 — Check what this registration step actually touches
+═══════════════════════════════════════════════════════════════
+
+The OTP/email confirmation step likely calls supabase.auth.signInWithOtp() 
+or similar — this uses the Supabase JS client (SUPABASE_URL + anon/
+service key), NOT the direct Postgres connection (SUPABASE_DB_URL) 
+we just switched.
+
+Show me:
+1. The exact code handling this OTP send step
+2. Confirm SUPABASE_URL, SUPABASE_ANON_KEY, and SUPABASE_SERVICE_ROLE_KEY 
+   are still correctly set (separate from SUPABASE_DB_URL) and not 
+   accidentally removed/broken during the migration
+
+═══════════════════════════════════════════════════════════════
+## STEP 3 — Check if this step writes to the database too
+═══════════════════════════════════════════════════════════════
+
+If after OTP verification the code tries to insert into `users` 
+using Drizzle (the new SUPABASE_DB_URL connection), check:
+- Does the insert reference any column that doesn't match the 
+  schema we just verified in Step 2 of the migration?
+- Is there a race condition where the OTP code path runs before 
+  the DB pool from SUPABASE_DB_URL has finished connecting?
+
+═══════════════════════════════════════════════════════════════
+## STEP 4 — Fix and retest
+═══════════════════════════════════════════════════════════════
+
+After identifying the real error from Step 1, fix it, then test 
+the full registration flow again from scratch:
+1. Enter registration details
+2. Request OTP — confirm no "خطأ داخلي في الخادم"
+3. Receive and enter the code
+4. Confirm account is created in both Supabase Auth AND public.users
+
+Show me the actual error first before making changes.

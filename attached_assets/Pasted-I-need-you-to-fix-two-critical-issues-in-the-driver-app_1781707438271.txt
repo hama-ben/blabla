@@ -1,0 +1,38 @@
+I need you to fix two critical issues in the driver application: a security vulnerability in the registration flow and a data filtering bug in the dashboard statistics. Please apply the following fixes carefully:
+
+ISSUE 1: Critical Security Vulnerability (Document Upload Bypass)
+The Bug (How the exploit works):
+There is a loophole allowing drivers to bypass the mandatory document upload phase and gain full access to the dashboard.
+
+The driver registers and reaches the document upload page.
+
+If the upload fails, the driver clicks the browser's "Back" button to skip the page.
+
+The driver logs in again with the same account.
+
+The system lets them directly into the dashboard without verifying if the documents were actually uploaded.
+
+The Required Fix:
+
+Server-Side Guard on Login: Every time a driver logs in, the server MUST check their profile status in the database (e.g., verifying a documents_uploaded boolean, or checking if both front_truck_photo_url and driving_license_url exist).
+
+Strict Middleware Redirect: If the driver has NOT uploaded the required documents, forcefully redirect them to the /driver/upload-documents page. They must not be able to access /driver-dashboard or any other protected route, even if they use a direct URL.
+
+Lock Down the Upload Page: On the document upload page, the final progression/submit button must remain DISABLED until BOTH "صورة الشاحنة من الأمام" (front truck photo) and "صورة رخصة القيادة" (driving license photo) are successfully uploaded and saved to the database.
+
+Prevent Navigation: Prevent the user from navigating away from the upload page until the documents are fully verified on the server.
+
+ISSUE 2: Dashboard Statistics Show Global Data
+The Bug:
+On the driver dashboard, the statistics cards for "الإجمالي" (Total), "قيد التوصيل" (In delivery), and "مكتمل" (Completed) are displaying the combined totals for ALL drivers in the application, rather than the specific driver's numbers.
+
+The Required Fix:
+Update the database queries that fetch these statistics so they are strictly filtered by the currently logged-in driver.
+
+مكتمل (Completed): Count of completed orders WHERE driver_id = currentDriverId
+
+قيد التوصيل (In Delivery): Count of active orders WHERE driver_id = currentDriverId
+
+الإجمالي (Total): Count of all orders WHERE driver_id = currentDriverId
+
+Ensure that a driver can NEVER see the statistics or order counts of other drivers. These numbers must reflect their personal account only.

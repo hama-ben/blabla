@@ -1,0 +1,75 @@
+Add a "تواصل معنا" (Contact Us) button on the login/welcome page 
+(the one shown with the Mizu logo, email/password fields, and 
+"تسجيل الدخول" button) — works for both driver and customer sides, 
+regardless of user type.
+
+═══════════════════════════════════════════════════════════════
+## STEP 1 — Add the button
+═══════════════════════════════════════════════════════════════
+
+Add a "تواصل معنا" button on this login/welcome screen, visible 
+to anyone (logged in or not, driver or customer).
+
+Placement suggestion: below "تسجيل الدخول" button, near 
+"نسيت كلمة المرور؟" / "سجل الآن"
+
+═══════════════════════════════════════════════════════════════
+## STEP 2 — Button opens a simple contact form (chat-like)
+═══════════════════════════════════════════════════════════════
+
+Clicking "تواصل معنا" opens a small modal/form (this acts as the 
+customer support chat mentioned) with:
+- A textarea: "اكتب رسالتك هنا..."
+- A submit button: "إرسال"
+
+═══════════════════════════════════════════════════════════════
+## STEP 3 — On message submit
+═══════════════════════════════════════════════════════════════
+
+When the user submits their message:
+1. Save the message to the existing support/disputes system 
+   (check if there's already a `ratings_disputes` or similar table 
+   used for support messages — if a dedicated support_messages 
+   table doesn't exist, create one: id, user_id (nullable if not 
+   logged in), message, created_at, status='pending')
+2. Show this confirmation text in the same modal:
+   "شكراً على رسالتك، سيتم التواصل معك قريباً"
+3. Below that, show a clickable link/button:
+   "صفحتنا الرسمية" 
+   → opens in a new tab: 
+   https://www.facebook.com/profile.php?id=61590856328769
+
+═══════════════════════════════════════════════════════════════
+## STEP 4 — Direct Facebook redirect option
+═══════════════════════════════════════════════════════════════
+
+Also make the MAIN "تواصل معنا" button itself directly open the 
+Facebook page in a new tab when clicked 
+(https://www.facebook.com/profile.php?id=61590856328769) — 
+so the person has two paths:
+- Option A: type a message first (goes through the form/chatbot flow)
+- Option B: click straight through to Facebook
+
+Clarify this with a clear small button layout, e.g.:
+  [تواصل معنا عبر فيسبوك]  (direct link)
+  [أرسل رسالة دعم]  (opens the form)
+
+═══════════════════════════════════════════════════════════════
+## STEP 5 — Make this available to ALL user types
+═══════════════════════════════════════════════════════════════
+
+This must work the same way regardless of whether the person is:
+- Not logged in yet (on this exact login screen)
+- A driver
+- A customer
+
+═══════════════════════════════════════════════════════════════
+## Test after implementing:
+═══════════════════════════════════════════════════════════════
+✅ "تواصل معنا" button visible on login screen
+✅ Clicking opens either the Facebook page directly, or a message 
+   form (per the two-button design above)
+✅ Submitting a message shows "شكراً على رسالتك، سيتم التواصل معك قريباً"
+✅ "صفحتنا الرسمية" link after submission opens the correct 
+   Facebook URL in a new tab
+✅ Works whether user is logged in or not, driver or customer

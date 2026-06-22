@@ -1,0 +1,138 @@
+Add a notifications panel for the bell icon that reads 
+announcements from Supabase sent by the admin.
+
+The admin side already exists and saves announcements to Supabase.
+I need the implementation on BOTH sides:
+- Driver side (driver-dashboard)
+- Customer/consumer side (customer app)
+
+═══════════════════════════════════════════════════════════════
+## STEP 1 — Find the existing announcements table
+═══════════════════════════════════════════════════════════════
+
+First, check Supabase for the existing announcements table:
+- Find the exact table name and column names
+- Find which column stores: title, message/body, created_at, 
+  is_active or status, and target audience if exists
+- Do NOT create a new table — use the existing one
+
+═══════════════════════════════════════════════════════════════
+## STEP 2 — Track read announcements (one table for both)
+═══════════════════════════════════════════════════════════════
+
+Create ONE new table in Supabase: announcement_reads
+  - id: uuid (primary key, default uuid)
+  - announcement_id: uuid (foreign key → existing announcements table)
+  - user_id: uuid (can be driver id OR customer id)
+  - user_type: text ('driver' or 'customer')
+  - read_at: timestamp (default now())
+  - UNIQUE constraint on (announcement_id, user_id, user_type)
+    to prevent duplicates
+
+═══════════════════════════════════════════════════════════════
+## STEP 3 — Shared reusable hook: useAnnouncements
+═══════════════════════════════════════════════════════════════
+
+Create a shared hook that works for both driver and customer:
+
+  useAnnouncements(userId: string, userType: 'driver' | 'customer')
+
+This hook must:
+- Fetch all active announcements from Supabase
+- Fetch announcement_reads for this userId + userType
+- Compute unreadCount (announcements not in reads)
+- Expose: { announcements, unreadCount, markAllAsRead }
+- markAllAsRead() → insert all unread ids into announcement_reads
+- Subscribe to Supabase realtime on announcements table:
+  * On INSERT → increment unreadCount + show toast:
+    "إعلان جديد من الإدارة 📢"
+
+═══════════════════════════════════════════════════════════════
+## STEP 4 — Shared reusable component: AnnouncementsPanel
+═══════════════════════════════════════════════════════════════
+
+Create one reusable component used in both dashboards:
+
+  <AnnouncementsPanel 
+    userId={currentUserId}
+    userType="driver" | "customer"
+    isOpen={boolean}
+    onClose={() => void}
+  />
+
+Panel behavior:
+- Shows list of announcements ordered by created_at DESC
+- Each card shows:
+  * Title (bold)
+  * Message/body text
+  * Date in Arabic relative time: "منذ ساعة", "أمس", etc.
+  * Unread = highlighted background (light blue or accent color)
+  * Read = normal background
+- On open: call markAllAsRead() automatically
+- Badge resets to 0 after opening
+- Empty state: "لا توجد إعلانات حالياً" 🔔
+- Close when clicking outside the panel
+- Smooth slide-down animation
+
+UI requirements:
+- RTL layout (Arabic, right-to-left)
+- Match existing app theme (dark/light)
+- Mobile: full width
+- Desktop: 380px width
+
+═══════════════════════════════════════════════════════════════
+## STEP 5 — Driver side integration
+═══════════════════════════════════════════════════════════════
+
+In the driver dashboard header:
+- Use the EXISTING bell icon — only add onClick handler
+- Use useAnnouncements(driverId, 'driver')
+- Show red badge with unreadCount on the bell icon
+- On bell click → open AnnouncementsPanel with userType="driver"
+
+═══════════════════════════════════════════════════════════════
+## STEP 6 — Customer side integration
+═══════════════════════════════════════════════════════════════
+
+In the customer app header:
+- Use the EXISTING bell icon — only add onClick handler
+- Use useAnnouncements(customerId, 'customer')
+- Show red badge with unreadCount on the bell icon
+- On bell click → open AnnouncementsPanel with userType="customer"
+
+═══════════════════════════════════════════════════════════════
+## STEP 7 — API endpoints
+═══════════════════════════════════════════════════════════════
+
+GET /announcements
+- Returns all active announcements
+- Requires auth (X-Session-Token, X-User-Id)
+- Returns each announcement with isRead: true/false
+  based on announcement_reads for the requesting user
+
+POST /announcements/mark-read
+- Body: { announcementIds: [...], userType: 'driver' | 'customer' }
+- Upserts into announcement_reads (ignore duplicates)
+- Requires auth
+
+═══════════════════════════════════════════════════════════════
+## TEST AFTER IMPLEMENTING:
+═══════════════════════════════════════════════════════════════
+
+Driver side:
+✅ Admin posts announcement → red badge on driver bell icon
+✅ Driver clicks bell → sees announcement in panel
+✅ Panel opens → all marked as read → badge disappears
+✅ New announcement arrives in real time without page refresh
+
+Customer side:
+✅ Admin posts announcement → red badge on customer bell icon
+✅ Customer clicks bell → sees announcement in panel
+✅ Panel opens → all marked as read → badge disappears
+✅ New announcement arrives in real time without page refresh
+
+Both sides:
+✅ Read status is separate per user (driver reads ≠ customer reads)
+✅ Empty state shown when no announcements exist
+✅ Panel closes when clicking outside
+✅ Works on mobile and desktop

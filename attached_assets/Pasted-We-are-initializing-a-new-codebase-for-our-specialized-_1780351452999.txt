@@ -1,0 +1,41 @@
+We are initializing a new codebase for our specialized water-delivery application, rebranding it from "Talabati" to "Al-Shaibia" (الشعيبية) [cite: Gemini Chat. Evidence: Sustained engagement in technical discussions regarding the development of the Talabati application and database configuration. Date: 2026-04 to 2026-05., Gemini Chat. Evidence: User stated the project was 100% ready and hosted on Replit, with final steps focused on generating an APK. Date: 2026-05.]. Please refactor and build the application (Frontend & Backend) linked to our Supabase database based on the following comprehensive specifications:
+
+1. Rebranding & UI/UX Visual Overhaul:
+- Change all app branding, titles, and text from "Talabati" to "Al-Shaibia" (الشعيبية) [cite: Gemini Chat. Evidence: Sustained engagement in technical discussions regarding the development of the Talabati application and database configuration. Date: 2026-04 to 2026-05., Gemini Chat. Evidence: User stated the project was 100% ready and hosted on Replit, with final steps focused on generating an APK. Date: 2026-05.].
+- CSS Animation: Add a smooth, lightweight background animation of falling water droplets (ماء متساقط) across the main screens.
+- Icon Change: Replace the old box/order icon everywhere with a custom icon/graphic representing a water truck with three large tanks in the back (شاحنة ذات ثلاث خزانات كبيرة).
+
+2. Map & Navigation Enhancements:
+- Improve the map interface to draw a clear route/poly-line guiding from the driver's current location to the consumer's location.
+- Integrate audio navigation prompts (e.g., voice commands like "Turn right", "Turn left" / اتجه يميناً، اتجه شمالاً) based on route simulation or location updates.
+
+3. Consumer Feature Modifications:
+- Remove the "number of barrels" (عدد البراميل) fields and logic entirely from the consumer request flow.
+- Order Acceptance Alert: When a driver accepts an order, instantly push a notification/modal to the consumer displaying the accepting driver's complete details (Name, phone, truck info).
+- Order Cancellation: Add an "Cancel Order" (إلغاء الطلبية) button for the consumer, allowing them to cancel their request before it gets delivered, updating the status in Supabase.
+- Password Recovery: Implement a "Forgot Password" (نسيان كلمة السر) flow on the login screen using Supabase Auth recovery links.
+
+4. Device Session Control (Security):
+- Implement a device/session limit restriction checking the database. Strict rule: A single account cannot be logged into more than two devices simultaneously (حد أقصى جهازين للحساب الواحد).
+
+5. Driver Subscription & Countdown Timer:
+- In the driver profile/dashboard, implement a continuous countdown timer displaying (Days / Hours / Minutes / Seconds) counting down to 0.
+- When the timer hits 0, the driver's account automatically becomes suspended/locked from accepting any new orders.
+- If a suspended driver attempts to select an order, display an error popup: "You must pay a monthly subscription to continue receiving orders" (عليك دفع اشتراك شهري لمتابعة استلام الطلبيات).
+- Below the message, display a "Go to Payment" (الانتقال إلى الدفع) button.
+
+6. Driver Payment Gateway:
+- In the payment screen, set a fixed rate of 500 DZD per month (500 دينار جزائري للشهر).
+- Provide an input field/dropdown where the driver selects the number of months they want to purchase (Minimum: 1 month, Maximum: 12 months).
+- Add a file uploader slot labeled "Upload Bank Transfer Receipt Picture" (رفع صورة إيصال تحويل المال). This image must upload straight to our Supabase Storage public bucket, saving the record for admin approval.
+
+7. Order Timeout & Smart Dispatch Loop:
+- Implement a 5-minute timer countdown for consumer orders.
+- If the 5 minutes expire without a driver manually picking it up, the order enters a smart dispatch script: it routes automatically and randomly to one of the available online drivers within the same area who does NOT currently have an active delivery.
+- Prevent Duplication: An order cannot be dispatched to the same driver more than once a week, unless there are very few available matching candidates in that area, in which case it's acceptable.
+
+8. Strict Geo-fencing & Location Boundaries (Wilaya & Commune):
+- Modify the order visibility query strictly: Orders must only appear to drivers who belong to the exact same Wilaya (ولاية) as the consumer.
+- Absolute Rule: Strict restriction preventing any order from leaving its original Commune (بلدية) to another Commune, regardless of the reason. Drivers can only see and deliver orders inside their own local commune boundaries.
+
+Please process this architecture step-by-step, update the database schemas where needed, rewrite the API/Realtime controllers, and notify me once the foundation is ready.

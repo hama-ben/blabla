@@ -1,0 +1,71 @@
+Two issues need fixing in the announcement/notification system:
+
+═══════════════════════════════════════════════════════════════
+## ISSUE 1 — New users see OLD announcements from before they registered
+═══════════════════════════════════════════════════════════════
+
+Currently, any announcement ever published shows up for every user, 
+even ones who registered long after the announcement was created.
+
+Required fix:
+- When fetching announcements for a user, only show announcements 
+  where created_at is AFTER that user's account creation date 
+  (users.created_at, or registration timestamp)
+- Exception: targeted announcements (target_audience = the user's 
+  own id) should ALWAYS show regardless of date, since those are 
+  meant specifically for that user (e.g. approval/rejection messages)
+
+Update the announcements fetch query:
+  WHERE (created_at > user.created_at OR target_audience = userId)
+  AND is_active = true
+
+═══════════════════════════════════════════════════════════════
+## ISSUE 2 — Announcements never disappear and pile up
+═══════════════════════════════════════════════════════════════
+
+Add TWO ways for an announcement to stop showing:
+
+### A) Manual dismiss button
+On each announcement card in the bell panel, add a small button 
+at the bottom right: "إخفاء" or "✓ تم"
+
+On click:
+1. Insert into announcement_reads (or equivalent dismissed-tracking 
+   table) for this user + announcement
+2. Remove the card from the visible list immediately with a 
+   smooth fade-out (300ms)
+3. Decrease the unread badge count by 1 if it was unread
+
+### B) Auto-expire after 15 seconds
+When an announcement panel is opened and a NEW (unread) announcement 
+is shown for the first time:
+- Start a 15 second timer
+- After 15 seconds, automatically mark it as read/dismissed 
+  (same logic as manual dismiss) and fade it out
+- If the user dismisses it manually before the timer ends, 
+  cancel the timer (no double action)
+- Already-read announcements (opened before) should NOT have 
+  this timer — only fresh/unread ones when first displayed
+
+### Persistence
+Dismissed announcements must stay hidden after page refresh or 
+re-login (tracked server-side in announcement_reads, not just 
+local state)
+
+═══════════════════════════════════════════════════════════════
+## Apply to BOTH driver and customer sides
+═══════════════════════════════════════════════════════════════
+
+✅ Driver dashboard bell panel
+✅ Customer dashboard bell panel
+
+═══════════════════════════════════════════════════════════════
+## Test:
+═══════════════════════════════════════════════════════════════
+✅ Brand new user registers → sees NO old announcements 
+   (only ones created after their signup, or targeted to them)
+✅ Click dismiss button → announcement fades out and stays gone 
+   after refresh
+✅ New unread announcement auto-disappears after 15 seconds 
+   if not manually dismissed
+✅ Badge count updates correctly in both cases

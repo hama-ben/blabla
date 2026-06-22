@@ -1,0 +1,31 @@
+Please carefully inject and implement the following four interconnected features directly into our existing codebase and Supabase configuration, modifying the files smoothly without destroying or wiping our current structure:
+
+1. Dynamic Subscription Gate, Payment Instruction & 1-Month Free Trial:
+- Interface Setup: Place a dynamic onboarding gate screen right after the driver registers/uploads their documents, but BEFORE they can access the main dashboard.
+- Option A) "Start 1-Month Free Trial" (استخدام مجاني لمدة شهر - لأول مرة): Check via Supabase if this is a newly registered driver account. If eligible, automatically update their subscription countdown timer by adding exactly 30 Days, then grant direct access to the dashboard.
+- Option B) "Pay Monthly Subscription" (دفع اشتراك شهري): Redirect them to our designated payment screen. Set a fixed rate of 500 DZD per month (500 دينار جزائري للشهر). 
+- STRICT PAYMENT INSTRUCTION DISPLAY: The payment UI must explicitly display this account number to the driver so they know where to send the money: "004129412426". The text must explicitly show: "يرجى إرسال مبلغ الاشتراك إلى الحساب التالي: 004129412426 ثم رفع صورة الوصل أدناه."
+- Form Fields: Provide an input field/dropdown to select the duration (from 1 to 12 months max). Add a file uploader slot labeled "Upload Bank Transfer Receipt Picture" to upload the image straight to our Supabase Storage public bucket for admin verification.
+- Stacking Rule: First-time users must retain their right to the free trial; if they choose to pay immediately, automatically stack their purchased months on top of the 30 free days.
+
+2. Data Persistence & Local Cache (الذاكرة المؤقتة لمنع ضياع البيانات):
+- Core Logic: Implement a local caching mechanism (using LocalStorage or secure local state persistence) across all driver registration and profile input screens.
+- Strict Behavior: If a driver is in the middle of filling out their registration forms, uploading credentials, or inputting details, and accidentally navigates backward, reloads the page, or exits the screen by mistake, the application must NOT wipe their inputs.
+- Auto-Pre-Fill: Upon returning to the form page, the app must automatically pull the cached data and pre-fill all text fields and selections so they don't have to rewrite everything from scratch.
+- Cache Lifecyle: This local cache must only be securely wiped clean AFTER the driver successfully submits the final onboarding form and data is fully committed to Supabase.
+
+3. Mutual Rating, Credibility Stars & Dispute System with Reason Input (نظام التقييم المتبادل والاعتراض مع خانة السبب):
+- Rating Flow: Immediately after an order delivery is successfully completed, trigger a post-delivery screen for both the Consumer (to rate the Driver) and the Driver (to rate the Consumer) using a 5-star rating scale.
+- Credibility Display: Calculate the average rating and display it as "Credibility Stars" (عدد النجوم والمصداقية) next to the driver's profile details when a consumer is matched, helping them see the incoming driver's reliability.
+- One-Time Dispute with Reason: Allow both drivers and consumers to lodge a formal objection/appeal exactly ONCE per received rating if they believe it was unfair.
+- Dispute Reason Field (خانة سبب الاعتراض): When the user clicks the "Object/Dispute" button, open a text input field where they must write the reason for their objection (سبب الاعتراض). 
+- Supabase Integration: Upon submission, this written reason, along with the dispute flag, must be sent and saved straight into the Supabase ratings/disputes table (`dispute_reason: text`, `is_disputed: boolean`, `dispute_count: integer` max 1) so the administrator can review the written justification and decide whether to wipe or keep the rating.
+
+4. Dynamic In-App Announcements & Contests System (نظام الإعلانات والمسابقات الكتابية):
+- Purpose: A lightweight, purely text-based (or text with thumbnail image) banner/notice system to publish contests, rewards, and announcements (مسابقات وجوائز). Strictly NO video content.
+- Database Schema: Create/ensure an `announcements` table in Supabase with fields: `id`, `title`, `content` (text), `target_audience` ('all', 'driver', 'consumer'), `badge_text` (e.g., "مسابقة" or "جائزة"), and `created_at`.
+- Consumer Dashboard View: Add a clean, prominent banner or marquee layout at the top of the Consumer's main dashboard that fetches and renders active announcements targeted at consumers.
+- Driver Dashboard View: Add a matching notice board or card section in the Driver's main screen to display targeted text announcements for drivers (e.g., active rewards for high completion rates).
+- Styling: Style these notice components beautifully using Tailwind CSS with eye-catching borders (e.g., a glowing soft amber or blue hue) so users spot the rewards easily.
+
+Please execute these integrations step-by-step into the respective existing files and confirm once the features are fully operational.

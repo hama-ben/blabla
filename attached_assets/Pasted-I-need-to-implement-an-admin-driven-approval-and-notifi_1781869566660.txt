@@ -1,0 +1,90 @@
+I need to implement an admin-driven approval and notification system 
+that connects to the user-facing app (driver and customer sides).
+This is PART 1 of a two-part system — the admin panel side will be 
+built separately and depends on the database structure created here.
+
+═══════════════════════════════════════════════════════════════
+## PART 1 — Driver approval flow + announcement-based notification
+═══════════════════════════════════════════════════════════════
+
+When admin approves a new driver:
+- The driver's `documents_uploaded`/`account_status` should already 
+  exist from prior work — make sure there is a clear status field:
+  `account_status: 'pending' | 'approved' | 'rejected'`
+- When status becomes 'approved': driver logs in normally and can 
+  access the dashboard
+- An announcement-style message must appear in the driver's own 
+  notification feed (the existing announcements/bell system):
+  Title: "تم قبولك بيننا"
+  Message: "مرحبا بك"
+  This must target ONLY that specific driver (not all drivers) —
+  if the announcements table only supports broadcast 
+  (target_audience = all/drivers/customers), add support for a 
+  single-user targeted announcement:
+  
+  Add column to announcements table: target_user_id (uuid, nullable)
+  - If target_user_id is set → only that user sees it
+  - If target_user_id is null → falls back to target_audience logic
+
+When admin rejects a new driver:
+- Status becomes 'rejected'
+- Driver sees a full-screen blocking modal when they try to log in:
+  Title: "تم رفض طلبك"
+  Message: "الرجاء التواصل مع الإدارة عبر الصفحات الرسمية"
+  A button at the bottom: "تواصل مع الإدارة"
+  This button opens (new tab): 
+  https://www.facebook.com/profile.php?id=61590856328769
+- Rejected driver cannot access the dashboard at all
+
+═══════════════════════════════════════════════════════════════
+## PART 2 — Subscription payment receipt approval/rejection
+═══════════════════════════════════════════════════════════════
+
+There must be a table (check if it exists, e.g. subscription_payments 
+or payments) where drivers upload a payment receipt image for their 
+monthly subscription. Make sure this table has:
+  - id, driver_id, receipt_url, status ('pending'|'approved'|'rejected'), 
+    created_at, reviewed_at
+
+When admin approves a payment receipt:
+- Add 30 days to that driver's active subscription end date
+  (find or add a column like `subscription_expires_at` on the 
+  driver profile — extend it by +30 days from either now() or 
+  from the current expiry if still active, whichever is later)
+- Send a targeted announcement notification to that driver:
+  Title: "تم قبول دفع وصلك"
+  Message: "تم إضافة 30 يوم إلى حسابك"
+
+When admin rejects a payment receipt:
+- Send a targeted announcement notification to that driver:
+  Title: "تواصل مع الإدارة"
+  Message: include a small clickable link/button to:
+  https://www.facebook.com/profile.php?id=61590856328769
+
+═══════════════════════════════════════════════════════════════
+## Required: Make sure these are accessible from Supabase 
+## for the admin panel to query (separate project)
+═══════════════════════════════════════════════════════════════
+
+The admin panel (a different Replit project) will read/write to 
+the SAME Supabase project. Make sure these tables/columns exist 
+and are clearly named, since the admin panel will:
+  - Read pending drivers (account_status = 'pending')
+  - Update account_status to 'approved'/'rejected'
+  - Read pending payment receipts (status = 'pending')
+  - Update payment status and extend subscription_expires_at
+  - Insert into announcements with target_user_id
+
+Please confirm and list the final exact table and column names 
+after implementing, so I can pass them to the admin panel project.
+
+═══════════════════════════════════════════════════════════════
+## Test scenarios:
+═══════════════════════════════════════════════════════════════
+✅ New driver registers → pending → admin approves → driver gets 
+   targeted announcement "تم قبولك بيننا" and logs in normally
+✅ New driver rejected → blocking modal with Facebook link button
+✅ Driver uploads payment receipt → admin approves → 30 days added 
+   + targeted announcement appears
+✅ Driver uploads payment receipt → admin rejects → targeted 
+   announcement with Facebook link appears

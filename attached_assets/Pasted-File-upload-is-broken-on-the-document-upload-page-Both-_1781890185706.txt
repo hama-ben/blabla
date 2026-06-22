@@ -1,0 +1,65 @@
+File upload is broken on the document upload page. Both upload 
+options show "خدمة التخزين غير متاحة" (storage service unavailable) 
+and the buttons appear disabled/grayed out.
+
+Please debug:
+
+═══════════════════════════════════════════════════════════════
+## STEP 1 — Check Supabase Storage bucket exists
+═══════════════════════════════════════════════════════════════
+
+Run this to list all storage buckets:
+  SELECT * FROM storage.buckets;
+
+Confirm the bucket used for driver documents (likely named 
+'driver-documents' or similar) actually exists. If missing, 
+show me the exact bucket name expected in the upload code.
+
+═══════════════════════════════════════════════════════════════
+## STEP 2 — Check Storage bucket RLS policies
+═══════════════════════════════════════════════════════════════
+
+Run this to check storage policies:
+  SELECT * FROM storage.objects WHERE bucket_id = '[bucket_name]' LIMIT 1;
+  
+  SELECT policyname, cmd, qual 
+  FROM pg_policies 
+  WHERE tablename = 'objects' AND schemaname = 'storage';
+
+If there's no INSERT policy allowing authenticated users to 
+upload, that's likely the cause. Add:
+
+  CREATE POLICY "allow_authenticated_upload" 
+  ON storage.objects FOR INSERT TO authenticated
+  WITH CHECK (bucket_id = '[bucket_name]');
+
+  CREATE POLICY "allow_authenticated_read"
+  ON storage.objects FOR SELECT TO authenticated
+  USING (bucket_id = '[bucket_name]');
+
+═══════════════════════════════════════════════════════════════
+## STEP 3 — Check environment variables/keys
+═══════════════════════════════════════════════════════════════
+
+Verify SUPABASE_URL and SUPABASE_ANON_KEY (or service role key 
+if used for uploads) are correctly set and not empty after the 
+recent restart.
+
+═══════════════════════════════════════════════════════════════
+## STEP 4 — Check the upload code itself
+═══════════════════════════════════════════════════════════════
+
+Show me the exact code that calls supabase.storage.from(...).upload(...)
+and check:
+- Is it wrapped in try/catch with proper error logging?
+- What is the EXACT error message/code returned by Supabase 
+  when upload fails? Log it and show me.
+
+═══════════════════════════════════════════════════════════════
+## After fixing, test:
+═══════════════════════════════════════════════════════════════
+✅ Driver can select and upload truck photo successfully
+✅ Driver can select and upload license photo successfully
+✅ Both files appear in Supabase Storage bucket
+✅ URLs are saved correctly to driver_details table
+✅ Submit button becomes enabled after both uploads succeed

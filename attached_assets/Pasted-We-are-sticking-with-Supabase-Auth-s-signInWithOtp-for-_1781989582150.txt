@@ -1,0 +1,80 @@
+We are sticking with Supabase Auth's signInWithOtp() for OTP delivery 
+(not switching to custom SMTP). Please configure it properly this 
+time to reliably send a 6-digit numeric code, not a magic link — 
+and add a safeguard so any future drift is caught immediately 
+rather than silently breaking again.
+
+═══════════════════════════════════════════════════════════════
+## STEP 1 — Walk me through fixing the Supabase email templates
+═══════════════════════════════════════════════════════════════
+
+I need to fix this directly in the Supabase Dashboard. Give me 
+EXTREMELY precise, numbered click-by-click steps — assume I know 
+nothing about this screen. For each of these templates:
+- "Confirm signup" 
+- "Reset password" (this one was already working — show me its 
+  current template so we use it as the reference/proof of what works)
+
+Tell me exactly:
+1. Which menu to open (Authentication → Email Templates)
+2. Which template to click
+3. What text/variable I should see in the template body
+4. Exactly what to change so it uses {{ .Token }} (numeric code) 
+   instead of {{ .ConfirmationURL }} (magic link)
+5. What to click to save
+
+═══════════════════════════════════════════════════════════════
+## STEP 2 — Fix the code side to match
+═══════════════════════════════════════════════════════════════
+
+Show me the exact current code for:
+1. Registration OTP request (signInWithOtp call)
+2. Password reset request (the one that already works correctly)
+
+Compare them line by line. The registration call must match the 
+working password-reset call's options exactly — specifically:
+- emailRedirectTo must be omitted or null (never set to a URL)
+- shouldCreateUser set appropriately for each case
+
+Fix any difference found.
+
+═══════════════════════════════════════════════════════════════
+## STEP 3 — Add a safeguard against silent magic-link drift
+═══════════════════════════════════════════════════════════════
+
+Add a check that the OTP email content does NOT change unexpectedly 
+in the future:
+
+1. When the OTP request is made, log a startup-time check that 
+   verifies the Supabase project's email template configuration 
+   matches expectations (if Supabase's Management API allows reading 
+   template config, check it; otherwise, document a manual checklist)
+
+2. In the verify-otp endpoint, if a token format that looks like 
+   a UUID/URL fragment is received instead of a 6-digit number, 
+   throw a clear error: "OTP format mismatch — check Supabase email 
+   template configuration" — so if this ever drifts again, the 
+   error message immediately points to the real cause instead of 
+   a generic failure.
+
+═══════════════════════════════════════════════════════════════
+## STEP 4 — Test end to end
+═══════════════════════════════════════════════════════════════
+
+1. Register a new test driver with a real email
+2. Confirm the email received contains a 6-DIGIT NUMBER only — 
+   describe exactly what the email looks like
+3. Enter the code in the app's 6-box UI → confirm verification works
+4. Confirm the user row is created correctly in Supabase users table
+5. Repeat for password reset to confirm it's still working
+
+Do not report success without describing the actual email content 
+received in Step 2.
+
+═══════════════════════════════════════════════════════════════
+## Important
+═══════════════════════════════════════════════════════════════
+Do not revert to the custom SMTP/crypto.randomInt() approach you 
+built earlier today — that one worked, but we are intentionally 
+choosing to rely on Supabase's native OTP system instead. Make 
+this configuration correct and durable.

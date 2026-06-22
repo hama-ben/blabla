@@ -1,0 +1,81 @@
+CRITICAL BUG FOUND: New user registration creates an account in 
+Supabase Auth (Authentication → Users) but does NOT insert a 
+corresponding row into the public.users table.
+
+I confirmed this directly:
+- Supabase Auth → Users shows the new account 
+  (e.g. www.9hamod@gmail.com, created today)
+- Supabase Table Editor → public.users table is completely EMPTY 
+  (0 rows) even though 3-4 accounts exist in Auth
+
+This means every registration is broken at the data layer — the 
+user can apparently log in (Auth works) but no profile/business 
+data (name, phone, user_type, account_status, wilaya) is ever 
+saved anywhere the rest of the app can read.
+
+═══════════════════════════════════════════════════════════════
+## STEP 1 — Find the registration code
+═══════════════════════════════════════════════════════════════
+
+Show me the exact registration handler code (likely in a route 
+like POST /api/auth/register or similar) — the part that calls 
+supabase.auth.signUp() or admin.createUser().
+
+═══════════════════════════════════════════════════════════════
+## STEP 2 — Confirm whether it ALSO inserts into public.users
+═══════════════════════════════════════════════════════════════
+
+After creating the Auth user, the code MUST also run an insert 
+like:
+
+  await supabase.from('users').insert({
+    id: authUser.id,  // same UUID as the Auth user
+    name, phone, email, user_type, wilaya, commune,
+    account_status: 'pending',
+    created_at: new Date()
+  })
+
+If this insert is missing entirely, or wrapped in code that's 
+silently failing (try/catch swallowing the error), that's the bug.
+
+═══════════════════════════════════════════════════════════════
+## STEP 3 — Check for silent failures
+═══════════════════════════════════════════════════════════════
+
+Add explicit error logging around this insert if it exists:
+
+  const { data, error } = await supabase.from('users').insert({...})
+  if (error) {
+    console.error('FAILED to insert into public.users:', error)
+    throw error  // do not let registration silently "succeed" 
+                 // if the profile row was never created
+  }
+
+Check if RLS policies on public.users are blocking inserts from 
+the anon/authenticated role during signup (since the user isn't 
+"logged in" yet at the exact moment of insert in some flows).
+
+═══════════════════════════════════════════════════════════════
+## STEP 4 — Fix and backfill
+═══════════════════════════════════════════════════════════════
+
+1. Fix the registration code so every new signup creates BOTH:
+   - Supabase Auth user
+   - public.users row with matching id
+   
+2. For the existing orphaned Auth accounts (the ones already 
+   created with no matching users row), either:
+   a) Write a one-time migration script that creates matching 
+      public.users rows for each orphaned Auth account (ask me 
+      for their name/phone/role if not recoverable from Auth metadata)
+   b) Or tell me to just delete those test accounts from Auth 
+      and re-register cleanly after the fix
+
+═══════════════════════════════════════════════════════════════
+## Test after fixing:
+═══════════════════════════════════════════════════════════════
+✅ Register a brand new test driver
+✅ Confirm it appears in Supabase Auth → Users
+✅ Confirm it ALSO appears in Table Editor → public.users 
+   with the same id, correct user_type='سائق', account_status='pending'
+✅ Confirm it shows up correctly in the admin Driver Queue

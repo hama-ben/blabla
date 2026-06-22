@@ -1,0 +1,70 @@
+One important addition to the previous prompt: when the admin 
+approves a driver for the FIRST TIME, grant them a 30-day free 
+subscription gift — not just a status change.
+
+═══════════════════════════════════════════════════════════════
+## On admin "Approve" action — first-time approval gift
+═══════════════════════════════════════════════════════════════
+
+When the admin approves a driver's documents in the Driver Queue:
+
+1. Set `account_status = 'approved'`
+
+2. Check if this is the driver's FIRST EVER approval:
+   - Add a column `first_approval_granted` (boolean, default false) 
+     to `users` or `driver_details` if it doesn't exist
+   - If `first_approval_granted = false`:
+     a. Set `subscription_expires_at = NOW() + 30 days` 
+        (this REPLACES the 3-day trial — it's a full 30-day gift, 
+        not additive to the remaining trial days)
+     b. Set `first_approval_granted = true`
+     c. Send a targeted announcement to the driver:
+        Title: "🎉 تم قبولك بيننا"
+        Content: "تهانينا! حصلت على هدية 30 يوماً مجاناً كمستخدم 
+        جديد. مرحباً بك في عائلة ميزو!"
+   - If `first_approval_granted = true` already (meaning they were 
+     previously approved, then somehow rejected/resubmitted, and 
+     are being approved again):
+     a. Do NOT grant another 30-day gift automatically
+     b. Just update account_status = 'approved'
+     c. Send a simpler announcement:
+        Title: "تم قبولك بيننا"
+        Content: "مرحباً بك مجدداً"
+     d. Their existing subscription_expires_at stays as-is 
+        (they'll need to pay normally if expired)
+
+═══════════════════════════════════════════════════════════════
+## Clarify the full subscription timeline for a NEW driver
+═══════════════════════════════════════════════════════════════
+
+To make sure this is unambiguous:
+
+  Day 0: Driver uploads documents → subscription_expires_at = 
+         NOW() + 3 days (trial while pending review)
+  
+  Day 0-3: Driver waits for admin review, can use app normally
+  
+  IF admin approves within those 3 days:
+    → subscription_expires_at is OVERWRITTEN to NOW() + 30 days 
+      (the 30-day gift starts fresh from the approval moment, 
+      not stacked on top of the 3-day trial)
+  
+  IF admin has NOT reviewed yet and 3 days pass:
+    → subscription expires, driver sees the subscription/payment 
+      screen (existing "مرحباً محمد" trial/payment screen) 
+      until admin approves
+  
+  IF admin rejects:
+    → account_status = 'rejected', no subscription change, 
+      driver sees rejection modal
+
+═══════════════════════════════════════════════════════════════
+## Test after implementing:
+═══════════════════════════════════════════════════════════════
+✅ New driver uploads docs → 3-day trial granted
+✅ Admin approves within 3 days → subscription_expires_at becomes 
+   30 days from approval moment (not 33 days, not stacked)
+✅ Driver receives "حصلت على هدية 30 يوماً" announcement
+✅ first_approval_granted is now true for this driver
+✅ If this same driver is ever rejected later and re-approved, 
+   no second 30-day gift is granted automatically

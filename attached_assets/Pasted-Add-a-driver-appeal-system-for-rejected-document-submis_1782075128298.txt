@@ -1,0 +1,57 @@
+Add a driver appeal system for rejected document submissions.
+
+═══════════════════════════════════════════════════════════════
+## PART 1 — Driver-side: appeal button on rejection modal
+═══════════════════════════════════════════════════════════════
+
+On the existing rejection modal (the one shown to a rejected 
+driver with the Facebook contact link), add a new option:
+
+- A button: "تقديم طعن" (Submit Appeal)
+- Clicking it opens a small form with a textarea:
+  "اكتب سبب طعنك أو أي توضيح تريد إضافته..."
+- Submit button: "إرسال الطعن"
+
+On submit:
+- Save the appeal text to a new table `driver_appeals`:
+    id, driver_id, message, status ('pending'/'reviewed'), 
+    created_at, admin_response (nullable), reviewed_at (nullable)
+- Show confirmation: "تم إرسال طعنك، سيتم مراجعته من الإدارة"
+- The Facebook contact button remains visible as an alternative 
+  path (not replaced)
+
+═══════════════════════════════════════════════════════════════
+## PART 4 — Driver-side appeal status visibility
+═══════════════════════════════════════════════════════════════
+
+If the driver tries to log in again while their appeal is pending, 
+the rejection modal should now show:
+- "تم استلام طعنك وهو قيد المراجعة" instead of the original 
+  rejection message, IF an appeal with status='pending' exists 
+  for them
+- Still show the Facebook contact option as a fallback
+
+If their appeal has been reviewed (status='reviewed') but they're 
+still rejected (admin chose "حفظ الملاحظة فقط" without reactivating), 
+show:
+- "تمت مراجعة طعنك. للمزيد من التفاصيل يرجى التواصل معنا"
+- Facebook contact button remains visible
+
+═══════════════════════════════════════════════════════════════
+## Database note
+═══════════════════════════════════════════════════════════════
+
+Make sure `driver_appeals` table is created in Supabase (same 
+database the rest of the app now uses) with proper foreign key 
+to users.id.
+
+═══════════════════════════════════════════════════════════════
+## Test after implementing:
+═══════════════════════════════════════════════════════════════
+✅ Rejected driver can submit an appeal with a message
+✅ Appeal is saved to driver_appeals table in Supabase with 
+   status='pending'
+✅ Driver sees "تم إرسال طعنك" confirmation after submitting
+✅ If driver logs in again with pending appeal → sees updated 
+   message instead of original rejection text
+✅ Facebook contact button still works as fallback in all cases

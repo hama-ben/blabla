@@ -1,0 +1,15 @@
+Please act as an expert Full-Stack Developer and implement the remaining backend, database, and UI enhancements for our application, 'Mizu'. Execute the following tasks systematically across the codebase:
+
+1. Device Session Limit (Max 3 Devices): > Implement session restriction logic for user accounts. A single user account must not be allowed to have more than 3 active concurrent devices or sessions at the same time. If a user attempts to log in or open the app on a 4th device, block the action and return a clear error message in Arabic: 'لقد تجاوزت الحد الأقصى للأجهزة المسموح بها (3 أجهزة). يرجى تسجيل الخروج من أحد الأجهزة أولاً.' Update the database schema if necessary to track active sessions.
+
+2. Receipt Image Upload Fix: > Debug and fix the database/logic issue causing the receipt image upload feature ('جدول رفع صورة الوصل') to fail. Inspect the backend routing, database table constraints, or storage bucket configurations. Ensure that consumers can successfully upload their receipt images, and that the file path or public URL is properly saved in the database without errors.
+
+3. Cross-Network Real-time Order Syncing: > Fix the connection and IP routing logic for receiving orders. Ensure that when a Driver is connected to one network (e.g., mobile data) and a Consumer is connected to an entirely different network (e.g., home Wi-Fi), they can seamlessly connect, sync order status, and update locations in real-time. Use WebSockets or Supabase Realtime to establish a reliable connection between them regardless of their network IPs.
+
+4. Favorite/Saved Locations Feature for Consumers: > Add a feature for consumers to save specific coordinates as 'Favorites' (المواقع المميزة) right after pinning or selecting a location on the map. Provide a small UI field/checkbox allowing them to save it with a custom label (e.g., 'منزلي', 'منزل والدي'). Store these in the database so that on future orders, the user can easily select a saved location from a dropdown menu instead of re-pinning it manually.
+
+5. Manual Driver Break Duration: > Fix the driver break feature ('خانة استراحة السائق'). Instead of the current hardcoded 30-minute break limit, update the UI and backend logic to allow the driver to manually enter or select their preferred break duration (e.g., via a time picker or manual input).
+
+6. Simplified 5-Star Rating System: > Modify the review and rating system. Completely remove the option for drivers to dispute or object to ratings ('خاصية الاعتراض على التقييم'). Keep only a clean 5-star rating system, and ensure there is a text input/textarea field (خانة الكتابة) where the customer can write comments or reasons for their rating.
+
+Please apply all these updates globally, run necessary database migrations, ensure the entire project builds successfully, and let me know once everything is ready for testing.

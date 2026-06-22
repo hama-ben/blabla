@@ -1,0 +1,99 @@
+This connects to the admin support chat system just built. Now I 
+need the matching USER-SIDE implementation in Mizu so drivers and 
+customers can see admin replies and have a real two-way conversation.
+
+═══════════════════════════════════════════════════════════════
+## CONTEXT — what already exists
+═══════════════════════════════════════════════════════════════
+
+There's already a "تواصل معنا" (Contact Us) feature on the login/
+welcome screen where users can submit a support message, which 
+saves to the `support_messages` table. The admin panel now has a 
+full chat interface to view and REPLY to these messages 
+(sender_type='admin' or 'user', admin_id column added today).
+
+Currently, users can only SEND a message once — they have no way 
+to see if the admin replied, or continue the conversation.
+
+═══════════════════════════════════════════════════════════════
+## STEP 1 — Make "تواصل معنا" a real two-way chat thread
+═══════════════════════════════════════════════════════════════
+
+Instead of a simple one-time message form, "تواصل معنا" should now 
+open a chat-style interface:
+
+- Fetch the user's full conversation history:
+    SELECT * FROM support_messages 
+    WHERE user_id = currentUserId 
+    ORDER BY created_at ASC
+
+- Display as chat bubbles:
+  * User's own messages (sender_type='user') — one side, e.g. 
+    right-aligned for RTL, primary color
+  * Admin's replies (sender_type='admin') — opposite side, 
+    different background color, maybe with a small "الدعم الفني" 
+    or "ميزو" label above admin messages
+
+- A text input at the bottom: "اكتب رسالتك..." + send button, 
+  same as before — but now it APPENDS to the existing thread 
+  instead of being a one-time form
+
+═══════════════════════════════════════════════════════════════
+## STEP 2 — Access point
+═══════════════════════════════════════════════════════════════
+
+This chat should be accessible from:
+- The existing "تواصل معنا" button on the login/welcome screen 
+  (for not-yet-logged-in users — keep working as before, anonymous 
+  if needed, or prompt login if user_id is required)
+- ALSO add an entry point inside the driver-dashboard and customer 
+  dashboard (e.g. a "الدعم الفني" / support icon in the header, 
+  near the bell icon) so logged-in users can continue or start a 
+  conversation without going back to the login screen
+
+═══════════════════════════════════════════════════════════════
+## STEP 3 — Unread admin reply indicator
+═══════════════════════════════════════════════════════════════
+
+If the admin has replied and the user hasn't opened the chat since:
+- Show a small badge/dot on the support icon in the dashboard 
+  header (similar style to the existing announcement bell badge)
+- Track this via a `user_viewed_at` timestamp on the conversation, 
+  or simply: if the latest message has sender_type='admin' and 
+  the user hasn't opened the chat panel since that message's 
+  created_at, show as unread
+
+When the user opens the chat, mark it as viewed (update/clear the 
+unread state).
+
+═══════════════════════════════════════════════════════════════
+## STEP 4 — Real-time updates
+═══════════════════════════════════════════════════════════════
+
+Subscribe to Supabase realtime on `support_messages` for this 
+user's conversation:
+- If the admin replies while the user has the chat open, the 
+  reply appears instantly without refresh
+- If the chat is closed, the unread badge appears live
+
+═══════════════════════════════════════════════════════════════
+## STEP 5 — Keep the Facebook fallback
+═══════════════════════════════════════════════════════════════
+
+Keep the existing "صفحتنا الرسمية" Facebook link button visible 
+within this chat interface as an alternative contact method — 
+don't remove it, just make it coexist with the new two-way chat.
+
+═══════════════════════════════════════════════════════════════
+## Test after implementing:
+═══════════════════════════════════════════════════════════════
+✅ User sends a message via "تواصل معنا" → appears in admin's 
+   chat panel (already confirmed working from admin side)
+✅ Admin replies → user sees the reply appear in their chat, 
+   correctly styled as coming from support/admin
+✅ Unread badge appears on user's dashboard when admin replies 
+   and chat is closed
+✅ Opening the chat clears the unread indicator
+✅ Real-time: reply appears instantly if chat is open when admin sends it
+✅ Facebook contact button still works as a fallback
+✅ Works for both driver and customer dashboards

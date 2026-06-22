@@ -1,0 +1,99 @@
+# Koyeb App configuration — version-controlled deployment settings.
+# Reference: https://www.koyeb.com/docs/apps/deploy-from-github
+#
+# HOW TO USE:
+#   1. In the Koyeb dashboard → Create App → GitHub
+#   2. Select your repo and branch "main"
+#   3. Koyeb detects this file automatically and pre-fills the form.
+#   4. Add the secret environment variables listed below via the dashboard
+#      (Koyeb dashboard → Secrets) — never commit real values here.
+
+name: talabati
+
+services:
+  - name: api-server
+    type: web
+
+    # ── Source ──────────────────────────────────────────────────────────────
+    git:
+      branch: main
+
+    # ── Build ────────────────────────────────────────────────────────────────
+    # Pipeline: install → migrate → build → run
+    #
+    # Migration runs during the BUILD phase (not startup) so that:
+    #   • It only runs once per deploy, not on every pod restart.
+    #   • A migration failure aborts the build — Koyeb keeps the previous
+    #     healthy instance running rather than replacing it with a broken one.
+    #   • DATABASE_URL is injected by Koyeb into the build environment
+    #     exactly the same as the runtime environment.
+    #
+    # drizzle-kit push applies schema changes that are safe (add column/table).
+    # For DESTRUCTIVE changes (drop column/table), drizzle-kit will prompt
+    # interactively — which hangs in CI. To approve a destructive migration,
+    # temporarily change the migrate script to use "push --force", deploy once,
+    # then revert.  Never leave --force permanently in the pipeline.
+    build:
+      buildpack:
+        build_command: pnpm install --frozen-lockfile && pnpm run db:migrate && pnpm --filter @workspace/api-server run build
+        run_command: node artifacts/api-server/dist/index.mjs
+
+    # ── Networking ───────────────────────────────────────────────────────────
+    ports:
+      - port: 8080
+        protocol: http
+
+    # ── Health check ─────────────────────────────────────────────────────────
+    health_checks:
+      - type: http
+        port: 8080
+        path: /api/health
+        grace_period: 10
+        interval: 30
+        timeout: 5
+        unhealthy_threshold: 3
+        healthy_threshold: 1
+
+    # ── Scaling ──────────────────────────────────────────────────────────────
+    scaling:
+      min: 1
+      max: 1
+
+    # ── Region ───────────────────────────────────────────────────────────────
+    # fra = Frankfurt. Change to was (Washington) or sin (Singapore) as needed.
+    regions:
+      - fra
+
+    # ── Environment variables ────────────────────────────────────────────────
+    # Non-secret values are set here directly.
+    # Secret values (marked below) must be added via the Koyeb dashboard → Secrets
+    # before the first deploy, then referenced by name.
+    env:
+      - key: NODE_ENV
+        value: production
+
+      - key: PORT
+        value: "8080"
+
+      # ── CORS ────────────────────────────────────────────────────────────────
+      # Comma-separated list of allowed frontend origins.
+      # The api-server also has these baked in as a fallback (KNOWN_ORIGINS in app.ts),
+      # so both must be updated when adding a new domain.
+      - key: CORS_ORIGIN
+        value: "https://mellow-naiad-f2a5d9.netlify.app"
+
+      # ── Secrets — create these in Koyeb dashboard → Secrets ─────────────────
+      - key: DATABASE_URL
+        secret: DATABASE_URL
+
+      - key: SUPABASE_URL
+        secret: SUPABASE_URL
+
+      - key: SUPABASE_ANON_KEY
+        secret: SUPABASE_ANON_KEY
+
+      - key: SUPABASE_SERVICE_ROLE_KEY
+        secret: SUPABASE_SERVICE_ROLE_KEY
+
+      - key: SESSION_SECRET
+        secret: SESSION_SECRET

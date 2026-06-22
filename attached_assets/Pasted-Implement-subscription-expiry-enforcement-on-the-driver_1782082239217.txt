@@ -1,0 +1,75 @@
+Implement subscription expiry enforcement on the driver app.
+
+═══════════════════════════════════════════════════════════════
+## STEP 1 — Block access when subscription expires
+═══════════════════════════════════════════════════════════════
+
+When a driver's `subscription_expires_at` is in the past (expired) 
+AND their `account_status = 'approved'`:
+
+On login or any attempt to access the dashboard, show a FULL-SCREEN 
+blocking modal (similar style to the existing rejection overlay):
+
+- Title: "انتهت صلاحية اشتراكك"
+- Message: "يرجى تجديد اشتراكك للمتابعة في استقبال الطلبات"
+- A button at the bottom: "الذهاب لصفحة الدفع" 
+  → navigates to the subscription payment page (the existing 
+  receipt upload page used for subscription_payments)
+
+The driver CANNOT access driver-dashboard or any other protected 
+route while in this expired state — same enforcement pattern as 
+the existing pending/rejected account guards (server-side check, 
+not just client-side).
+
+═══════════════════════════════════════════════════════════════
+## STEP 2 — Update subscription price to 1000 DZD
+═══════════════════════════════════════════════════════════════
+
+Find where the subscription price (500 DZD) is displayed or 
+referenced — likely on the subscription/payment page and possibly 
+in any pricing constant in the codebase.
+
+Update ALL occurrences from 500 DZD to 1000 DZD:
+- Payment page UI text
+- Any pricing constant/config value
+- Payment instructions text if it mentions the amount
+
+═══════════════════════════════════════════════════════════════
+## STEP 3 — Server-side guard
+═══════════════════════════════════════════════════════════════
+
+Add this check in the existing middleware/guard that already 
+handles pending/rejected status checks:
+
+  if (driver.account_status === 'approved' && 
+      driver.subscription_expires_at < NOW()) {
+    return blockAndRedirectToExpiredScreen()
+  }
+
+This must run on every protected driver route, not just on login, 
+since a driver could be already logged in when their subscription 
+expires mid-session.
+
+═══════════════════════════════════════════════════════════════
+## STEP 4 — After renewed payment is approved
+═══════════════════════════════════════════════════════════════
+
+Confirm the existing payment approval flow (admin approves a 
+subscription_payments receipt) still correctly:
+- Extends subscription_expires_at by 30 days from the later of 
+  (NOW(), current expiry)
+- This automatically lifts the expired-screen block once the 
+  driver's subscription_expires_at is back in the future
+
+═══════════════════════════════════════════════════════════════
+## Test after implementing:
+═══════════════════════════════════════════════════════════════
+✅ Manually expire a test driver's subscription (set 
+   subscription_expires_at to yesterday) → confirm they see the 
+   blocking modal on next login or page access
+✅ "الذهاب لصفحة الدفع" button navigates correctly
+✅ Subscription page now shows 1000 DZD everywhere, not 500
+✅ After admin approves a new payment receipt for that driver, 
+   the block is lifted and dashboard is accessible again
+✅ A driver with subscription still valid is NOT affected by 
+   this change at all

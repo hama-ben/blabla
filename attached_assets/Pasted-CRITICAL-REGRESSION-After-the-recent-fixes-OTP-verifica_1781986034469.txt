@@ -1,0 +1,80 @@
+CRITICAL REGRESSION: After the recent fixes, OTP verification and 
+password reset now send a CONFIRMATION LINK via email instead of 
+a 6-digit numeric code.
+
+This breaks the UI completely — the app has a 6-digit code input 
+screen (6 separate boxes) that the user is supposed to type a 
+code into. Now the email contains a clickable link instead, which 
+doesn't match this UI at all and the user has no code to type.
+
+This must be reverted to numeric OTP codes. This is likely because 
+switching to Supabase Auth's default email template/flow sends a 
+magic link by default, instead of an OTP code.
+
+═══════════════════════════════════════════════════════════════
+## STEP 1 — Identify what changed
+═══════════════════════════════════════════════════════════════
+
+Show me the exact code calling Supabase Auth for:
+1. Registration OTP send (likely supabase.auth.signInWithOtp())
+2. Password reset (likely supabase.auth.resetPasswordForEmail())
+
+Supabase Auth's `signInWithOtp()` sends a magic link by DEFAULT 
+unless explicitly configured to send a numeric OTP. Check if the 
+call includes:
+
+  await supabase.auth.signInWithOtp({
+    email,
+    options: {
+      shouldCreateUser: true,
+      emailRedirectTo: undefined // must be omitted/null for OTP code mode
+    }
+  })
+
+If `emailRedirectTo` is set to any URL, or if Supabase project's 
+email template is configured for "Magic Link" instead of "OTP", 
+that's the cause.
+
+═══════════════════════════════════════════════════════════════
+## STEP 2 — Check Supabase email template configuration
+═══════════════════════════════════════════════════════════════
+
+In Supabase Dashboard → Authentication → Email Templates:
+- The "Confirm signup" and "Reset password" templates need to use 
+  the {{ .Token }} variable (6-digit code) instead of 
+  {{ .ConfirmationURL }} (magic link)
+
+Tell me exactly what to check/click in these template settings, 
+since I cannot access the dashboard myself without guidance — 
+walk me through verifying and fixing this with precise steps.
+
+═══════════════════════════════════════════════════════════════
+## STEP 3 — Fix the verify endpoint to match
+═══════════════════════════════════════════════════════════════
+
+Once sending is fixed to use numeric codes, confirm the verify 
+endpoint uses:
+
+  await supabase.auth.verifyOtp({
+    email,
+    token: sixDigitCode,
+    type: 'signup' // or 'recovery' for password reset
+  })
+
+NOT a token extracted from a URL.
+
+═══════════════════════════════════════════════════════════════
+## STEP 4 — Test both flows after fixing
+═══════════════════════════════════════════════════════════════
+
+Test:
+1. Register a new test account → email arrives with a 6-DIGIT CODE, 
+   not a link
+2. Enter the code in the 6-box UI → verification succeeds
+3. Trigger "forgot password" → email arrives with a 6-DIGIT CODE, 
+   not a link  
+4. Enter the code → password reset works
+
+Do not report success unless the email genuinely contains a numeric 
+code, not a URL. Show me a description of what the actual email 
+content looks like after the fix.

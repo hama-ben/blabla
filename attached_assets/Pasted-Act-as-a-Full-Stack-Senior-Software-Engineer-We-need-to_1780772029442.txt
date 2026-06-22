@@ -1,0 +1,28 @@
+Act as a Full-Stack Senior Software Engineer. We need to implement a massive feature update for the "Talabati" water delivery application using React/Vite/TypeScript for frontend and Node.js/Supabase for backend. Follow these exact requirements:
+
+### 1. Global Application & Authentication Updates
+- **Language Switcher UI**: Add a language toggle in the navbar. Display flags next to languages: Arabic (Algerian Flag - Primary), French (France Flag), English (UK Flag).
+- **Theme Toggle**: Implement a Dark Mode / Light Mode switch that persists the user preference.
+- **Max 2 Devices Restriction**: In the backend authentication/login logic, check active sessions for the user. If they attempt to log in on a 3rd device, block the login and return an error message: "عذراً، لقد تجاوزت الحد المسموح به للأجهزة".
+- **Duplicate Registration Check**: During signup, if the email or phone number already exists in the database, block the action and return specific Arabic messages: "الحساب مسجل بالفعل" or "الرقم مستخدم بالفعل".
+- **Forgot Password (OTP UI)**: Modify the verification page to display a clean 6-digit input layout (6 separate boxes) ready to receive the 6-digit OTP code sent to the user's email.
+
+### 2. Consumer Side (Water Ordering & Invoicing)
+- **Automatic Invoice Calculation**: Implement the following strict pricing matrix in the order configuration step. When a consumer selects a water volume, automatically calculate and display the total bill in DZ/DA dynamically before checkout:
+  - 5L = 20 DA  | 10L = 30 DA  | 15L = 40 DA  | 20L = 60 DA
+  - 30L = 70 DA | 40L = 100 DA | 50L = 120 DA | 100L = 250 DA
+  - 150L = 300 DA| 200L = 400 DA| 300L = 600 DA| 500L = 1000 DA
+  - 1000L = 1600 DA
+- **Profile/Account Settings**: Build a user settings screen where consumers can view profile data or change their password. Password change requires validating their old password first.
+
+### 3. Driver Side (Subscriptions, Realtime & Navigation)
+- **Subscription Access Guard Gate**: Drivers MUST choose a subscription plan before accessing any main dashboard features. If they click back from the payment screen, return them immediately to the subscription choice page.
+- **Subscription Rules & Bonus**: 
+  - Free Monthly Trial: Can be claimed only ONCE per lifetime. Instantly activates the account.
+  - Paid Subscription: When a driver uploads a receipt screenshot, immediately grant them 3 free days as a bonus with a notice status: "في انتظار تأكيد اشتراكك".
+- **Daily Countdown Timer**: Display a prominent, dynamic daily countdown timer showing remaining subscription days based on their selected tier.
+- **Real-Time Single-Claim Order System**: Use Supabase Realtime Channels. The absolute instant a driver accepts/claims a consumer's active order, that order must immediately disappear from all other active drivers' screens without requiring a page refresh.
+- **Live Map Polyline & Google Maps Intent**: On the driver's active delivery map, draw a clear blue line connecting the driver's live GPS location tracker to the client's destination location. Below the map, add a prominent button: "الإنطلاق عبر خرائط Google". When clicked, open an external Google Maps navigation intent URL initialized with the live driver coordinates as origin and client coordinates as destination, fully ready to start driving.
+- **Profile Settings**: Add the same secure password change mechanics (requiring the old password) for the driver profile.
+
+Please execute these files updates sequentially, updating the Database schemas/RPCS if needed, and let me review the code changes.

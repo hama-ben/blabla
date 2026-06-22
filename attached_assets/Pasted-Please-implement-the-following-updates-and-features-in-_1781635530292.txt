@@ -1,0 +1,20 @@
+Please implement the following updates and features in the codebase step by step:
+
+1. Driver Profile - Star Rating Display:
+Update the Driver Profile screen. Fetch the driver's overall average rating and display it visually using a 5-star UI component (e.g., displaying star icons and text like "4.5 / 5").
+
+2. Remove Driver-to-Consumer Rating:
+Locate the order completion flow for drivers. Completely remove the UI modal, component, and any logic that prompts the driver to rate the consumer after finishing a delivery. The order should simply be marked as completed without asking for a review.
+
+3. Fix "Forgot Password" OTP Sending:
+Fix the "Forgot Password" screen logic. Ensure that when a user enters their email and submits, the app correctly calls the authentication backend (e.g., Supabase Auth API) to successfully send the OTP recovery code to the entered email address.
+
+4. Consumer Profile - Custom Notification Ringtone:
+In the Consumer Profile screen, add a "Notification Sound" settings section. It should provide a dropdown or list of predefined built-in ringtones for the "Driver Arrived" notification. Additionally, include an upload button allowing the consumer to upload a custom audio file from their device to use as their ringtone. Save this preference locally or in the database.
+
+5. Customer Service Contact via Email:
+Add a "Customer Service" form/button in both the Driver's and Consumer's interfaces. When a user submits a message through this form, configure the app to automatically forward the user's message to our support Gmail address. (You can implement this using an Email service integration like EmailJS, Resend, or a Supabase Edge Function).
+
+6. Driver "New Order" Popup & Ringtone Customization:
+- Implement an in-app popup (toast/modal) notification for drivers that appears when a new order arrives. Clicking this popup should navigate the driver directly to the "Current Orders" screen.
+- In the Driver Profile, add the exact same "Notification Sound" settings UI created in Task 4, so the driver can also choose a built-in ringtone or upload a custom audio file specifically for this "New Order" notification.

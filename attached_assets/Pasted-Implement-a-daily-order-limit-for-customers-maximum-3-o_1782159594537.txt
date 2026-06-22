@@ -1,0 +1,86 @@
+Implement a daily order limit for customers: maximum 3 orders per 
+day, resetting at midnight Algeria time (UTC+1, no DST).
+
+═══════════════════════════════════════════════════════════════
+## STEP 1 — Check existing order creation limit (if any)
+═══════════════════════════════════════════════════════════════
+
+First check if any daily limit logic already exists in the order 
+creation endpoint (POST /orders or similar). Show me the current 
+code before making changes.
+
+═══════════════════════════════════════════════════════════════
+## STEP 2 — Count today's orders before allowing a new one
+═══════════════════════════════════════════════════════════════
+
+Before creating a new order, the server must count how many orders 
+this customer has already placed TODAY, using Algeria's timezone 
+(Africa/Algiers, UTC+1, fixed offset year-round — no daylight 
+saving changes).
+
+Calculate "today" boundaries in Algeria time:
+  - startOfDayAlgeria = today at 00:00:00 in UTC+1, converted to UTC 
+    for the database query
+  - endOfDayAlgeria = tomorrow at 00:00:00 in UTC+1, converted to UTC
+
+Query:
+  SELECT COUNT(*) FROM orders 
+  WHERE user_id = customerId 
+  AND created_at >= startOfDayAlgeria 
+  AND created_at < endOfDayAlgeria
+
+IMPORTANT: Count ALL orders regardless of status (pending, in 
+delivery, completed, even cancelled) — this is a daily REQUEST 
+limit, not a completed-orders limit, unless you tell me otherwise. 
+Confirm this assumption with me if unsure, but proceed with 
+counting all statuses by default.
+
+═══════════════════════════════════════════════════════════════
+## STEP 3 — Enforce the limit
+═══════════════════════════════════════════════════════════════
+
+If the count is already >= 3:
+- Reject the new order creation request with a clear error:
+  HTTP 429, message: "لقد استنفدت الحد الأقصى لطلبات اليوم (3 طلبات). 
+  يمكنك تقديم طلبات جديدة بعد منتصف الليل."
+- Do NOT create the order row
+
+If count < 3:
+- Allow order creation normally
+
+═══════════════════════════════════════════════════════════════
+## STEP 4 — Frontend UI feedback
+═══════════════════════════════════════════════════════════════
+
+On the customer-facing order creation screen:
+- Show a small indicator: "الطلبات المتبقية اليوم: X من 3" 
+  (fetch today's count on page load via a lightweight endpoint, 
+  e.g. GET /orders/today-count)
+- If X = 0, disable the "إرسال الطلب" button and show the 429 
+  message proactively instead of waiting for a failed submission
+- If a submission fails with the 429 error, show the same Arabic 
+  message in a toast/alert
+
+═══════════════════════════════════════════════════════════════
+## STEP 5 — New endpoint for the counter
+═══════════════════════════════════════════════════════════════
+
+  GET /orders/today-count
+  Returns: { used: number, remaining: number, limit: 3, 
+             resetsAt: "[midnight Algeria time as ISO string]" }
+
+Requires customer auth.
+
+═══════════════════════════════════════════════════════════════
+## Test after implementing:
+═══════════════════════════════════════════════════════════════
+✅ Customer places 1st, 2nd, 3rd order today → all succeed
+✅ Customer attempts a 4th order same day → rejected with the 
+   correct Arabic message
+✅ Counter on the order screen correctly shows "0 من 3" after 
+   3 orders placed
+✅ At midnight Algeria time, the counter resets and a 4th order 
+   becomes possible again (test by checking the boundary 
+   calculation logic, not necessarily waiting until actual midnight)
+✅ Drivers are NOT affected by this limit — confirm it only 
+   applies to customer/consumer order creation, not driver actions

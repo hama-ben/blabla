@@ -1,0 +1,113 @@
+We are doing a FULL migration of this app's database from Replit 
+Postgres back to Supabase, permanently. This is intentional and final 
+— do not suggest staying on Replit Postgres or building an API bridge 
+instead. Proceed carefully and incrementally, testing after each step.
+
+═══════════════════════════════════════════════════════════════
+## STEP 1 — Inventory everything currently on Replit Postgres
+═══════════════════════════════════════════════════════════════
+
+Before changing anything, list:
+1. Every table currently defined in the Drizzle schema 
+   (lib/db/src/schema/index.ts) with all columns and types
+2. Every place in the codebase that imports/uses the Drizzle db 
+   client to read or write data
+3. Any data currently in Replit Postgres that must be preserved 
+   (the 3-4 test accounts, or anything else)
+
+Show me this full inventory before touching any code.
+
+═══════════════════════════════════════════════════════════════
+## STEP 2 — Compare with what already exists in Supabase
+═══════════════════════════════════════════════════════════════
+
+Supabase already has these tables (confirmed via Table Editor):
+  users, driver_details, driver_status, drivers, orders, payments,
+  subscription_payments, announcements, ratings, ratings_disputes,
+  saved_locations, push_subscriptions
+
+For each table in your Step 1 inventory, match it to the 
+corresponding Supabase table. Flag any mismatches in column names 
+or types between what Drizzle expects and what Supabase actually has.
+
+Do NOT assume they match — run:
+  SELECT column_name, data_type FROM information_schema.columns 
+  WHERE table_name = '[each table]';
+against Supabase for every table and compare directly.
+
+═══════════════════════════════════════════════════════════════
+## STEP 3 — Decide schema source of truth
+═══════════════════════════════════════════════════════════════
+
+Going forward, Supabase's existing table structure is the source 
+of truth (since the admin panel already depends on it). Adjust the 
+Drizzle schema definitions to MATCH Supabase exactly — column names, 
+types, nullability — rather than changing Supabase to match Drizzle.
+
+If any column genuinely needs to be added to Supabase (e.g. 
+something the app needs that doesn't exist yet), list it separately 
+and we'll add it via Supabase SQL Editor before proceeding.
+
+═══════════════════════════════════════════════════════════════
+## STEP 4 — Switch the connection
+═══════════════════════════════════════════════════════════════
+
+In lib/db/src/index.ts and lib/db/drizzle.config.ts:
+- Set the connection string to Supabase's Postgres connection 
+  (found in Supabase → Project Settings → Database → Connection string)
+- This is DIFFERENT from SUPABASE_URL (which is for the REST/JS 
+  client) — it's the direct Postgres connection string, format:
+  postgresql://postgres:[password]@db.[project-ref].supabase.co:5432/postgres
+- Store it as a new secret: SUPABASE_DB_URL (do not reuse the old 
+  broken SUPABASE_DATABASE_URL name to avoid confusion)
+- Update both files to use this new variable exclusively, with NO 
+  fallback to Replit's DATABASE_URL
+
+═══════════════════════════════════════════════════════════════
+## STEP 5 — Test connection BEFORE touching app logic
+═══════════════════════════════════════════════════════════════
+
+Write and run a tiny standalone test script that:
+1. Connects using the new SUPABASE_DB_URL
+2. Runs a simple SELECT on the users table
+3. Runs a simple INSERT of a test row
+4. Runs a SELECT to confirm the test row is there
+5. Deletes the test row
+
+Show me the output of this test. Do not proceed to Step 6 until 
+this works cleanly.
+
+═══════════════════════════════════════════════════════════════
+## STEP 6 — Migrate the orphaned test accounts (if recoverable)
+═══════════════════════════════════════════════════════════════
+
+For the existing Supabase Auth accounts with no matching users row 
+(dayd07ou@gmail.com, hamatv213@gmail.com, www.9hamod@gmail.com):
+- These can be deleted and re-registered cleanly AFTER step 5 
+  confirms the new connection works — do this rather than trying 
+  to backfill them, since they were created during a broken state
+
+═══════════════════════════════════════════════════════════════
+## STEP 7 — Full registration → login → dashboard test
+═══════════════════════════════════════════════════════════════
+
+After the connection switch:
+1. Register a brand new test driver from scratch
+2. Confirm a row appears in Supabase Table Editor → users 
+   (or whichever table is correct per Step 2/3)
+3. Confirm login works
+4. Confirm the driver reaches the document upload page (not 
+   bypassed, not stuck)
+5. Confirm after document upload, the driver appears in the 
+   admin panel's Driver Queue
+
+Show me confirmation of each of these 5 sub-steps individually — 
+do not report "done" without proof for each one.
+
+═══════════════════════════════════════════════════════════════
+## Do not proceed past any step without showing results
+═══════════════════════════════════════════════════════════════
+
+This is a critical, irreversible-feeling migration. Go step by 
+step, show me real output at each step, and stop immediately if 
+anything looks wrong rather than pushing forward and compounding errors.

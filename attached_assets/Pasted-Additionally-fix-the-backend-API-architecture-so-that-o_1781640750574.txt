@@ -1,0 +1,21 @@
+Additionally, fix the backend/API architecture so that order requests reliably flow between the consumer and the driver in real time, regardless of device, browser, or network:
+
+1. Set up a real-time communication layer (WebSocket, e.g. via Socket.io or native WebSocket) between the backend server and both client types (consumer app and driver app). Do NOT rely on the consumer and driver staying on the same device, network, or browser session — they are two independent clients connecting to the same backend.
+
+2. Define a clear event-driven flow:
+   - Consumer creates an order → POST request to the backend (e.g. /api/orders) → order saved in the database with status "pending".
+   - Backend immediately broadcasts a "new_order" event via WebSocket to all currently connected/available drivers (or to a specific driver if the system assigns one).
+   - Driver accepts the order → PATCH/POST request updates order status to "accepted" in the database → backend broadcasts "order_accepted" event back to that specific consumer (using a unique consumer/session/user ID, not a broadcast to everyone).
+   - Continue this pattern for further status changes (e.g. "driver_on_the_way", "delivered", "cancelled"), each updating the database first, then notifying the relevant party via WebSocket.
+
+3. Use unique, persistent identifiers (user ID or session ID, not socket ID alone) to associate each WebSocket connection with the correct consumer or driver, since socket IDs change on reconnect/refresh and devices may disconnect/reconnect (e.g. when switching networks or backgrounding the app).
+
+4. Add a polling fallback: in addition to WebSocket events, implement a regular polling endpoint (e.g. GET /api/orders/:id/status every few seconds) so that if a WebSocket connection drops (common in in-app browsers or unstable mobile networks), the client can still detect order status changes without needing a live socket connection.
+
+5. Make sure CORS settings and the WebSocket server are properly configured to accept connections from different origins/devices, since the consumer and driver will be on entirely separate devices and possibly different networks.
+
+6. Add basic connection state handling on both clients (consumer and driver apps): show a clear "Connecting..." / "Reconnecting..." / "Offline" indicator if the WebSocket connection drops, and automatically attempt reconnection with exponential backoff.
+
+7. Test the full flow explicitly: simulate one device as "consumer" creating an order, and a separate device/browser session as "driver" receiving and accepting it, confirming that both sides see status updates without needing to manually refresh the page.
+
+Explain at the end which backend files/routes you modified or added (e.g. WebSocket server setup, order routes, database schema changes for order status) and why.

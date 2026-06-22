@@ -1,0 +1,96 @@
+Implement a device limit so each user account (driver or customer) 
+can only be logged in on a maximum of 3 distinct DEVICES at the 
+same time — not 3 browsers, but 3 physical devices.
+
+═══════════════════════════════════════════════════════════════
+## STEP 1 — Generate a persistent device identifier
+═══════════════════════════════════════════════════════════════
+
+On the client side, generate a unique device ID that persists 
+across browser sessions and survives app updates/cache clears as 
+much as possible:
+
+- Use a combination of stable signals (NOT just a random UUID 
+  stored in localStorage alone, since clearing storage would 
+  bypass the limit):
+  * Generate a UUID on first app load
+  * Store it in localStorage AND as a long-lived cookie (1 year 
+    expiry) as a fallback if localStorage is cleared but cookie 
+    survives, or vice versa
+  * If this is the Android APK (WebView wrapper), also try to use 
+    a native device identifier via the GoNative/Median bridge if 
+    available (window.gonative?.device?.getId() or similar) — 
+    this is more reliable than browser storage for the APK case
+
+- Send this `deviceId` in a header (e.g. `X-Device-Id`) on every 
+  authenticated API request
+
+═══════════════════════════════════════════════════════════════
+## STEP 2 — Track active devices per user
+═══════════════════════════════════════════════════════════════
+
+Create a new table `user_devices`:
+  id, user_id, device_id, device_label (e.g. "Chrome on Android", 
+  derived from User-Agent), first_seen_at, last_seen_at
+
+On every successful login:
+1. Check how many DISTINCT device_id rows exist for this user_id 
+   in `user_devices`
+2. If the incoming device_id already exists in the table → just 
+   update `last_seen_at = NOW()`, allow login normally
+3. If the incoming device_id is NEW and current distinct device 
+   count for this user is already 3 → REJECT the login with a 
+   clear error message (see Step 3)
+4. If the incoming device_id is NEW and current count is less 
+   than 3 → insert the new device_id row, allow login
+
+═══════════════════════════════════════════════════════════════
+## STEP 3 — Error shown when limit exceeded
+═══════════════════════════════════════════════════════════════
+
+When login is rejected due to device limit:
+- Show a clear message: "لقد تجاوزت الحد الأقصى لعدد الأجهزة المسموح 
+  بها (3 أجهزة). يرجى تسجيل الخروج من أحد أجهزتك القديمة أولاً."
+- Optionally list the existing devices (device_label, last_seen_at) 
+  so the user knows which ones are using their slots
+- Add a way for the user to remove an old device themselves (a 
+  "إزالة هذا الجهاز" button next to each listed device) so they 
+  can free up a slot without contacting support
+
+═══════════════════════════════════════════════════════════════
+## STEP 4 — Device management endpoint
+═══════════════════════════════════════════════════════════════
+
+Add:
+  GET /auth/devices — lists the current user's registered devices
+  DELETE /auth/devices/:deviceId — removes a device, freeing a slot
+
+These must be authenticated and only allow a user to manage their 
+OWN devices (verify device_id belongs to the requesting user_id).
+
+═══════════════════════════════════════════════════════════════
+## STEP 5 — Cleanup of stale devices (optional but recommended)
+═══════════════════════════════════════════════════════════════
+
+Devices not seen in 90+ days (last_seen_at older than 90 days) 
+should be automatically removable/ignored when counting toward 
+the limit of 3 — add this check to Step 2's counting logic:
+
+  COUNT distinct device_id WHERE user_id = X 
+  AND last_seen_at > NOW() - INTERVAL '90 days'
+
+This prevents someone from being permanently locked out due to 
+an old phone they no longer use that was never manually removed.
+
+═══════════════════════════════════════════════════════════════
+## Test after implementing:
+═══════════════════════════════════════════════════════════════
+✅ Logging in from 3 different devices/browsers succeeds normally
+✅ Attempting a 4th distinct device login is rejected with the 
+   correct Arabic message
+✅ Logging in again from an ALREADY-registered device (same 
+   deviceId) always works, no matter how many total devices exist
+✅ User can view and remove old devices to free up a slot
+✅ After removing a device, a new 4th device can now log in 
+   successfully
+✅ Devices inactive for 90+ days don't count toward the limit
