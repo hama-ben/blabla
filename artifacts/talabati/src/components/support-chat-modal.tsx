@@ -13,6 +13,7 @@ import {
 import { customFetch } from "@workspace/api-client-react";
 import { supabase } from "@/lib/supabase";
 import { setLastViewed, type SupportMessage } from "@/hooks/use-support-unread";
+import { getSocket } from "@/lib/socket-client";
 
 const FACEBOOK_URL = "https://www.facebook.com/profile.php?id=61590856328769";
 
@@ -103,6 +104,24 @@ export function SupportChatModal({ userId, userName, onClose }: SupportChatModal
       .subscribe();
 
     return () => { try { supabase.removeChannel(channel); } catch { /* ignore */ } };
+  }, [userId]);
+
+  // Socket.io fast-path — catches admin replies pushed via emitToUser()
+  // before Supabase Realtime postgres_changes fires (typically ~100ms faster).
+  useEffect(() => {
+    const socket = getSocket();
+    const handleReply = (data: { message?: SupportMessage }) => {
+      const msg = data?.message;
+      if (!msg) return;
+      setMessages((prev) => {
+        if (prev.find((m) => m.id === msg.id)) return prev;
+        return [...prev, msg];
+      });
+      setLastViewed(userId);
+      scrollToBottom();
+    };
+    socket.on("support_reply", handleReply);
+    return () => { socket.off("support_reply", handleReply); };
   }, [userId]);
 
   const handleSend = async (e: React.FormEvent) => {

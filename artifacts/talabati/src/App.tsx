@@ -10,6 +10,7 @@ import DriverDashboard from "@/pages/driver-dashboard";
 import DriverUploadDocs from "@/pages/driver-upload-docs";
 import SubscriptionPage from "@/pages/subscription";
 import ProfilePage from "@/pages/profile";
+import AdminPage from "@/pages/admin";
 import { useAuth } from "@/hooks/use-auth";
 import { useEffect } from "react";
 import { useLocation } from "wouter";
@@ -89,6 +90,7 @@ function Router() {
       <Route path="/driver-upload-docs" component={DriverUploadDocs} />
       <Route path="/subscription" component={SubscriptionPage} />
       <Route path="/profile" component={ProfilePage} />
+      <Route path="/admin" component={AdminPage} />
       <Route component={NotFound} />
     </Switch>
   );

@@ -12,14 +12,16 @@
  */
 
 import { Router, type Request, type Response, type NextFunction, type IRouter } from "express";
-import { eq, desc, sql } from "drizzle-orm";
+import { eq, desc, sql, asc, and, ne } from "drizzle-orm";
 import {
   db,
   usersTable,
   driverDetailsTable,
   subscriptionPaymentsTable,
+  supportMessagesTable,
 } from "@workspace/db";
 import { getSupabaseAdmin } from "../lib/supabase-server";
+import { emitToUser } from "../lib/socket-server";
 
 const router: IRouter = Router();
 
@@ -318,6 +320,162 @@ router.post("/admin/payments/:paymentId/reject", async (req, res): Promise<void>
 
   req.log.info({ paymentId, driverId: payment.driverId }, "Payment rejected");
   res.json({ ok: true, paymentId, driverId: payment.driverId, status: "rejected" });
+});
+
+// ═══════════════════════════════════════════════════════════════════════
+// SUPPORT CHAT MANAGEMENT
+// ═══════════════════════════════════════════════════════════════════════
+
+// GET /admin/support/threads
+// Lists all users who have ever sent a support message, sorted by most
+// recent activity. Returns one entry per thread with the last message
+// preview and a count of unread (pending) user messages.
+router.get("/admin/support/threads", async (req, res): Promise<void> => {
+  try {
+    // One row per userId: latest message text + timestamp, pending count.
+    // We pull every support message and aggregate in JS to avoid complex
+    // SQL that would differ between SQLite and Postgres dialects.
+    const rows = await db
+      .select({
+        id:         supportMessagesTable.id,
+        userId:     supportMessagesTable.userId,
+        message:    supportMessagesTable.message,
+        senderType: supportMessagesTable.senderType,
+        status:     supportMessagesTable.status,
+        createdAt:  supportMessagesTable.createdAt,
+      })
+      .from(supportMessagesTable)
+      .orderBy(asc(supportMessagesTable.createdAt));
+
+    // Group by userId
+    const byUser = new Map<string, typeof rows>();
+    for (const row of rows) {
+      const uid = row.userId ?? "__anon__";
+      if (!byUser.has(uid)) byUser.set(uid, []);
+      byUser.get(uid)!.push(row);
+    }
+
+    // Fetch user names for known userIds
+    const knownIds = [...byUser.keys()].filter((k) => k !== "__anon__");
+    let userMap = new Map<string, { name: string; phone: string; userType: string }>();
+    if (knownIds.length > 0) {
+      const users = await db
+        .select({ id: usersTable.id, name: usersTable.name, phone: usersTable.phone, userType: usersTable.userType })
+        .from(usersTable)
+        .where(sql`${usersTable.id} = ANY(${sql.raw(`ARRAY[${knownIds.map(() => "?").join(",")}]`)})`);
+      // Fallback: use a JS filter since Drizzle's inArray needs a non-empty array
+      const usersFiltered = await db
+        .select({ id: usersTable.id, name: usersTable.name, phone: usersTable.phone, userType: usersTable.userType })
+        .from(usersTable);
+      const knownSet = new Set(knownIds);
+      for (const u of usersFiltered) {
+        if (knownSet.has(u.id)) userMap.set(u.id, { name: u.name, phone: u.phone, userType: u.userType });
+      }
+    }
+
+    // Build thread summaries
+    const threads = [...byUser.entries()]
+      .map(([uid, msgs]) => {
+        const last = msgs[msgs.length - 1];
+        const pendingCount = msgs.filter((m) => m.senderType === "user" && m.status === "pending").length;
+        const user = uid !== "__anon__" ? userMap.get(uid) : undefined;
+        return {
+          userId:       uid === "__anon__" ? null : uid,
+          userName:     user?.name ?? "مجهول",
+          userPhone:    user?.phone ?? null,
+          userType:     user?.userType ?? null,
+          lastMessage:  last.message,
+          lastMessageAt: last.createdAt,
+          senderType:   last.senderType,
+          pendingCount,
+          totalMessages: msgs.length,
+        };
+      })
+      .sort((a, b) =>
+        new Date(b.lastMessageAt ?? 0).getTime() - new Date(a.lastMessageAt ?? 0).getTime()
+      );
+
+    res.json({ threads });
+  } catch (err) {
+    req.log.error({ err }, "admin/support/threads: DB query failed");
+    res.status(500).json({ error: "تعذّر جلب المحادثات" });
+  }
+});
+
+// GET /admin/support/threads/:userId
+// Full message history for one user + basic user profile info.
+router.get("/admin/support/threads/:userId", async (req, res): Promise<void> => {
+  const { userId } = req.params;
+  try {
+    const [user] = await db
+      .select({ id: usersTable.id, name: usersTable.name, phone: usersTable.phone, userType: usersTable.userType, wilaya: usersTable.wilaya, commune: usersTable.commune })
+      .from(usersTable)
+      .where(eq(usersTable.id, userId));
+
+    const messages = await db
+      .select()
+      .from(supportMessagesTable)
+      .where(eq(supportMessagesTable.userId, userId))
+      .orderBy(asc(supportMessagesTable.createdAt));
+
+    res.json({
+      user: user ?? { id: userId, name: "مجهول", phone: null, userType: null, wilaya: null, commune: null },
+      messages,
+    });
+  } catch (err) {
+    req.log.error({ err }, "admin/support/threads/:userId: DB query failed");
+    res.status(500).json({ error: "تعذّر جلب المحادثة" });
+  }
+});
+
+// POST /admin/support/threads/:userId/reply
+// Admin sends a reply to a user. Persists the message, marks all pending
+// user messages as "replied", then pushes a Socket.io event to the user
+// for instant delivery without a page refresh.
+router.post("/admin/support/threads/:userId/reply", async (req, res): Promise<void> => {
+  const { userId } = req.params;
+  const { message } = req.body as { message?: string };
+
+  if (!message?.trim()) {
+    res.status(400).json({ error: "الرسالة فارغة" });
+    return;
+  }
+
+  try {
+    // Insert admin reply
+    const [row] = await db
+      .insert(supportMessagesTable)
+      .values({
+        userId,
+        message:    message.trim(),
+        senderType: "admin",
+        status:     "replied",
+      })
+      .returning();
+
+    // Mark all pending user messages in this thread as replied
+    await db
+      .update(supportMessagesTable)
+      .set({ status: "replied" })
+      .where(
+        and(
+          eq(supportMessagesTable.userId, userId),
+          eq(supportMessagesTable.senderType, "user"),
+          eq(supportMessagesTable.status, "pending")
+        )
+      );
+
+    // Real-time delivery — push to the user's Socket.io room instantly.
+    // Falls back to Supabase Realtime postgres_changes on the client side
+    // if the user is not connected via Socket.io.
+    emitToUser(userId, "support_reply", { message: row });
+
+    req.log.info({ userId, messageId: row.id }, "✅ Admin replied to support thread");
+    res.json({ message: row });
+  } catch (err) {
+    req.log.error({ err }, "admin/support/threads/:userId/reply: DB insert failed");
+    res.status(500).json({ error: "تعذّر إرسال الرد" });
+  }
 });
 
 export default router;
