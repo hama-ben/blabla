@@ -12,6 +12,7 @@ const config: CapacitorConfig = {
   server: {
     androidScheme: "https",
     cleartext: false,
+    url: "https://mizu-nyv1.onrender.com",
   },
   plugins: {
     SplashScreen: {
