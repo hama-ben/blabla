@@ -22,6 +22,7 @@ import {
 } from "@workspace/db";
 import { getSupabaseAdmin } from "../lib/supabase-server";
 import { emitToUser } from "../lib/socket-server";
+import { sendPushToUser } from "../lib/web-push";
 
 const router: IRouter = Router();
 
@@ -469,6 +470,16 @@ router.post("/admin/support/threads/:userId/reply", async (req, res): Promise<vo
     // Falls back to Supabase Realtime postgres_changes on the client side
     // if the user is not connected via Socket.io.
     emitToUser(userId, "support_reply", { message: row });
+
+    // Web Push — reaches the user even when the app tab is closed or the
+    // phone screen is off.  Fails silently if VAPID keys are not configured
+    // or the user has no push subscription.
+    const preview = row.message.length > 60 ? row.message.slice(0, 60) + "…" : row.message;
+    sendPushToUser(userId, {
+      title: "رسالة جديدة من الدعم الفني",
+      body:  preview,
+      url:   "/",
+    }).catch(() => {});
 
     req.log.info({ userId, messageId: row.id }, "✅ Admin replied to support thread");
     res.json({ message: row });

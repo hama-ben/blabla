@@ -1,0 +1,67 @@
+When an admin sends a reply via the support chat, the user 
+(driver or customer) currently has no immediate visible alert — 
+they would only notice if they happen to open the support icon. 
+This needs to be more prominent so they don't miss it.
+
+═══════════════════════════════════════════════════════════════
+## STEP 1 — Real-time popup/toast when admin reply arrives
+═══════════════════════════════════════════════════════════════
+
+While the user has the app open (any page — dashboard, orders, 
+etc.), if a NEW message with sender_type='admin' arrives via the 
+existing Supabase realtime subscription on `support_messages`:
+
+Show a prominent toast/banner notification (not just the badge dot):
+- Style: similar to a notification toast, appears at the top or 
+  bottom of the screen, auto-positioned above any bottom navigation
+- Icon: 💬 or support icon
+- Text: "رسالة جديدة من الدعم الفني"
+- Show a short preview of the message content (truncated to ~50 
+  characters)
+- Tapping the toast → opens the support chat directly showing 
+  that message
+- Auto-dismisses after 6-8 seconds if not tapped, OR has a small 
+  X to dismiss manually
+- Do NOT show this toast if the user currently has the support 
+  chat panel already open (they're already seeing the message 
+  live in that case) — only show it when they're elsewhere in the app
+
+═══════════════════════════════════════════════════════════════
+## STEP 2 — If the app is in the background or closed
+═══════════════════════════════════════════════════════════════
+
+Check if the existing Web Push notification system (built earlier 
+today for order alerts) can be reused here:
+- If the user has an active push subscription, send a push 
+  notification when an admin reply arrives, even if the app tab 
+  is closed or the phone screen is off
+- Title: "رسالة جديدة من الدعم الفني"
+- Body: short preview of the message
+- Clicking the push notification opens the app directly to the 
+  support chat
+
+If push isn't reliably working yet for this use case, at minimum 
+ensure Step 1 (in-app toast) works perfectly first — push is a 
+bonus on top, not a replacement.
+
+═══════════════════════════════════════════════════════════════
+## STEP 3 — Badge indicator stays as a secondary signal
+═══════════════════════════════════════════════════════════════
+
+Keep the existing unread badge/dot on the support icon as-is — 
+this remains useful for cases where the user missed the toast 
+(e.g. was away from the screen for a few seconds) or reopens the 
+app later and needs to see there's something unread.
+
+═══════════════════════════════════════════════════════════════
+## Test after implementing:
+═══════════════════════════════════════════════════════════════
+✅ User is on driver-dashboard, admin sends a reply → toast 
+   appears immediately with message preview
+✅ Tapping the toast opens the support chat showing the new message
+✅ If user already has support chat open when reply arrives, no 
+   duplicate toast shown (they see it live in the chat already)
+✅ Badge/dot on support icon still works as before
+✅ Works for both driver and customer sides
+✅ If push notifications are already working from earlier today's 
+   work, admin replies also trigger a push when app is closed/background

@@ -12,6 +12,8 @@ import { AnnouncementsPanel } from "@/components/announcements-panel";
 import { useSupportChatStore } from "@/stores/support-chat";
 import { useSupportUnread } from "@/hooks/use-support-unread";
 import { SupportChatModal } from "@/components/support-chat-modal";
+import { useAdminReplyToast } from "@/hooks/use-admin-reply-toast";
+import { SupportReplyToast } from "@/components/support-reply-toast";
 
 export function WaterDrops() {
   return (
@@ -119,6 +121,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
   // Support chat
   const { isOpen: supportOpen, open: openSupport, close: closeSupport } = useSupportChatStore();
   const { hasUnread, markViewed, refetch: refetchUnread } = useSupportUnread(userId ?? null);
+  const { toast: supportToast, dismiss: dismissSupportToast } = useAdminReplyToast(userId ?? null);
 
   const handleSupportOpen = () => {
     markViewed();
@@ -241,6 +244,15 @@ export function Layout({ children }: { children: React.ReactNode }) {
           userId={userId}
           userName={name ?? ""}
           onClose={closeSupport}
+        />
+      )}
+
+      {/* Admin reply toast — only shown when support chat is closed */}
+      {supportToast && !supportOpen && (
+        <SupportReplyToast
+          key={supportToast.key}
+          toast={supportToast}
+          onDismiss={dismissSupportToast}
         />
       )}
     </div>
