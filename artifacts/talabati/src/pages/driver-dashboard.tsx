@@ -33,6 +33,7 @@ import { format } from "date-fns";
 import type { DriverStatusInputCurrentStatus } from "@workspace/api-client-react";
 import { supabase, updateDriverLocation } from "@/lib/supabase";
 import { useSupportChatStore } from "@/stores/support-chat";
+import { useSupportUnread } from "@/hooks/use-support-unread";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Root page
@@ -345,6 +346,17 @@ function DriverDashboardContent({ driverId }: { driverId: string }) {
 
   const { name, userType } = useAuth();
   const openSupport = useSupportChatStore((s) => s.open);
+  const isSupportOpen = useSupportChatStore((s) => s.isOpen);
+  const { hasUnread, latestAdminMsgId } = useSupportUnread(driverId);
+  const autoOpenedForRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    if (!hasUnread || !latestAdminMsgId) return;
+    if (isSupportOpen) return;
+    if (autoOpenedForRef.current === latestAdminMsgId) return;
+    autoOpenedForRef.current = latestAdminMsgId;
+    openSupport();
+  }, [hasUnread, latestAdminMsgId, isSupportOpen, openSupport]);
 
   return (
     <>

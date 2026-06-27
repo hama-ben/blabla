@@ -41,24 +41,25 @@ function setLastViewed(userId: string) {
 
 export function useSupportUnread(userId: string | null) {
   const [hasUnread, setHasUnread] = useState(false);
+  const [latestAdminMsgId, setLatestAdminMsgId] = useState<string | null>(null);
 
   const checkUnread = useCallback(async () => {
-    if (!userId) { setHasUnread(false); return; }
+    if (!userId) { setHasUnread(false); setLatestAdminMsgId(null); return; }
     try {
       const data = await customFetch<{ messages: SupportMessage[] }>("/api/support/thread");
       const msgs: SupportMessage[] = data?.messages ?? [];
-      if (msgs.length === 0) { setHasUnread(false); return; }
+      if (msgs.length === 0) { setHasUnread(false); setLatestAdminMsgId(null); return; }
 
       const latest = msgs[msgs.length - 1];
-      if (latest.senderType !== "admin") { setHasUnread(false); return; }
+      if (latest.senderType !== "admin") { setHasUnread(false); setLatestAdminMsgId(null); return; }
 
       const lastViewed = getLastViewed(userId);
-      if (!lastViewed) { setHasUnread(true); return; }
-
-      const latestDate = new Date(latest.createdAt);
-      setHasUnread(latestDate > lastViewed);
+      const isUnread = !lastViewed || new Date(latest.createdAt) > lastViewed;
+      setLatestAdminMsgId(isUnread ? latest.id : null);
+      setHasUnread(isUnread);
     } catch {
       setHasUnread(false);
+      setLatestAdminMsgId(null);
     }
   }, [userId]);
 
@@ -92,7 +93,7 @@ export function useSupportUnread(userId: string | null) {
     setHasUnread(false);
   }, [userId]);
 
-  return { hasUnread, markViewed, refetch: checkUnread };
+  return { hasUnread, latestAdminMsgId, markViewed, refetch: checkUnread };
 }
 
 export { getLastViewed, setLastViewed };
