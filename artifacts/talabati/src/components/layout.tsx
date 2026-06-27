@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useLocation } from "wouter";
 import { useAuth } from "@/hooks/use-auth";
 import { LogOut, Sun, Moon, UserCircle, Bell, HeadphonesIcon } from "lucide-react";
@@ -118,12 +118,22 @@ export function Layout({ children }: { children: React.ReactNode }) {
 
   // Support chat
   const { isOpen: supportOpen, open: openSupport, close: closeSupport } = useSupportChatStore();
-  const { hasUnread, markViewed, refetch: refetchUnread } = useSupportUnread(userId ?? null);
+  const { hasUnread, latestAdminMsgId, markViewed, refetch: refetchUnread } = useSupportUnread(userId ?? null);
+  const autoOpenedForRef = useRef<string | null>(null);
 
   const handleSupportOpen = () => {
     markViewed();
     openSupport();
   };
+
+  // Auto-open chat when there is a new unread admin reply
+  useEffect(() => {
+    if (!hasUnread || !latestAdminMsgId) return;
+    if (supportOpen) return;
+    if (autoOpenedForRef.current === latestAdminMsgId) return;
+    autoOpenedForRef.current = latestAdminMsgId;
+    openSupport();
+  }, [hasUnread, latestAdminMsgId, supportOpen, openSupport]);
 
   // Re-check unread when support chat closes
   useEffect(() => {

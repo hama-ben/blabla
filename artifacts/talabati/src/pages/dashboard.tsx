@@ -16,7 +16,6 @@ import { useRealtimeOrderStatus } from "@/hooks/use-realtime-order-status";
 import { format } from "date-fns";
 import { playNotificationSound, stopNotificationSound, CONSUMER_ARRIVAL_SOUND_KEY } from "@/hooks/use-notification-sound";
 import { useSupportChatStore } from "@/stores/support-chat";
-import { useSupportUnread } from "@/hooks/use-support-unread";
 
 type View = "menu" | "new-order" | "my-orders";
 
@@ -50,17 +49,6 @@ export default function Dashboard() {
   const arrivalLoopRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const openSupport = useSupportChatStore((s) => s.open);
-  const isSupportOpen = useSupportChatStore((s) => s.isOpen);
-  const { hasUnread, latestAdminMsgId } = useSupportUnread(userId);
-  const autoOpenedForRef = useRef<string | null>(null);
-
-  useEffect(() => {
-    if (!hasUnread || !latestAdminMsgId) return;
-    if (isSupportOpen) return;
-    if (autoOpenedForRef.current === latestAdminMsgId) return;
-    autoOpenedForRef.current = latestAdminMsgId;
-    openSupport();
-  }, [hasUnread, latestAdminMsgId, isSupportOpen, openSupport]);
 
   if (!userId) { setLocation("/"); return null; }
   if (userType === "سائق") { setLocation("/driver-dashboard"); return null; }

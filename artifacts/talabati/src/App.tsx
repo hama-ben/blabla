@@ -18,6 +18,7 @@ import { ThemeProvider } from "@/lib/theme";
 import { I18nProvider } from "@/lib/i18n";
 import { usePushSubscription } from "@/hooks/use-push-subscription";
 import { useTokenRefresh } from "@/hooks/use-token-refresh";
+import { ErrorBoundary } from "@/components/error-boundary";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Global session-eviction listener
@@ -106,7 +107,9 @@ function App() {
               <SessionEvictionGuard />
               <TokenRefreshGate />
               <PushSubscriptionGate />
-              <Router />
+              <ErrorBoundary>
+                <Router />
+              </ErrorBoundary>
             </WouterRouter>
             <Toaster />
           </TooltipProvider>
