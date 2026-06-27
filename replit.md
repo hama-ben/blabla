@@ -1,6 +1,6 @@
-# Mizu — Water Delivery App
+# [Project name]
 
-_A full-stack Arabic water delivery app connecting consumers to drivers in Algeria, with OTP registration, geo-fencing by wilaya/commune, driver subscriptions, and real-time order dispatch._
+_Replace the heading above with the project's name, and this line with one sentence describing what this app does for users._
 
 ## Run & Operate
 

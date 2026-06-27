@@ -1,0 +1,48 @@
+run = "npm run dev"
+modules = ["nodejs-20", "web", "bash", "python-3.11", "postgresql-16"]
+
+[deployment]
+deploymentTarget = "cloudrun"
+run = ["node", "artifacts/api-server/dist/index.mjs"]
+build = ["bash", "-c", "pnpm install --frozen-lockfile && pnpm --filter @workspace/talabati run build && pnpm --filter @workspace/api-server run build"]
+
+[agent]
+expertMode = true
+stack = "BEST_EFFORT_FALLBACK"
+
+[workflows]
+
+[[ports]]
+localPort = 5000
+externalPort = 80
+
+[[ports]]
+localPort = 8080
+externalPort = 8080
+
+[[ports]]
+localPort = 8081
+externalPort = 8081
+
+[[ports]]
+localPort = 8082
+externalPort = 3000
+
+[[ports]]
+localPort = 19283
+externalPort = 3001
+
+[nix]
+channel = "stable-25_05"
+
+[userenv]
+
+[userenv.shared]
+PORT = "8080"
+SUPABASE_URL = "https://aeoyteruvcxqimwusrey.supabase.co"
+VITE_SUPABASE_URL = "https://aeoyteruvcxqimwusrey.supabase.co"
+VITE_SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFlb3l0ZXJ1dmN4cWltd3VzcmV5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODA0MjM3ODUsImV4cCI6MjA5NTk5OTc4NX0.vi9Chq9WgzSKEKz50EHJyaKnPtBRi1MvIjdtlePJHH8"
+SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFlb3l0ZXJ1dmN4cWltd3VzcmV5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODA0MjM3ODUsImV4cCI6MjA5NTk5OTc4NX0.vi9Chq9WgzSKEKz50EHJyaKnPtBRi1MvIjdtlePJHH8"
+ADMIN_API_KEY = "S6R4TS7P-EA9O47WI-ASS6VD2C-HXKHBBAO"
+SUPABASE_DB_URL = "postgresql://postgres.aeoyteruvcxqimwusrey:hama123hama@aws-0-eu-west-1.pooler.supabase.com:6543/postgres"
+VITE_API_BASE_URL = "https://mizu-nyv1.onrender.com"

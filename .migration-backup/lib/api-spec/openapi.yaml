@@ -1,0 +1,726 @@
+openapi: 3.1.0
+info:
+  # Do not change the title, if the title changes, the import paths will be broken
+  title: Api
+  version: 0.1.0
+  description: Mizu water delivery API
+servers:
+  - url: /api
+    description: Base API path
+tags:
+  - name: health
+    description: Health operations
+  - name: auth
+    description: Authentication operations
+  - name: orders
+    description: Order management
+  - name: driver
+    description: Driver management
+paths:
+  /healthz:
+    get:
+      operationId: healthCheck
+      tags: [health]
+      summary: Health check
+      responses:
+        "200":
+          description: Healthy
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HealthStatus"
+
+  /auth/register:
+    post:
+      operationId: register
+      tags: [auth]
+      summary: Register a new user (legacy direct flow)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RegisterInput"
+      responses:
+        "201":
+          description: User registered
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthResponse"
+        "400":
+          description: Registration failed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /auth/register-request:
+    post:
+      operationId: registerRequest
+      tags: [auth]
+      summary: Step 1 – validate inputs and send OTP to email
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RegisterInput"
+      responses:
+        "202":
+          description: OTP sent to email
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RegisterRequestResponse"
+        "400":
+          description: Validation failed or email/phone already exists
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /auth/verify-otp:
+    post:
+      operationId: verifyOtp
+      tags: [auth]
+      summary: Step 2 – verify OTP and create user account
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/VerifyOtpInput"
+      responses:
+        "201":
+          description: Account created and verified
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthResponse"
+        "400":
+          description: Invalid or expired OTP
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /auth/login:
+    post:
+      operationId: login
+      tags: [auth]
+      summary: Login user
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/LoginInput"
+      responses:
+        "200":
+          description: Login successful
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthResponse"
+        "401":
+          description: Invalid credentials
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /orders:
+    post:
+      operationId: createOrder
+      tags: [orders]
+      summary: Create a new order
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/OrderInput"
+      responses:
+        "201":
+          description: Order created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Order"
+        "400":
+          description: Order failed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /orders/{userId}:
+    get:
+      operationId: getUserOrders
+      tags: [orders]
+      summary: Get all orders for a user
+      parameters:
+        - name: userId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: List of orders
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Order"
+
+  /orders/{orderId}/status:
+    patch:
+      operationId: updateOrderStatus
+      tags: [orders]
+      summary: Update order status (driver)
+      parameters:
+        - name: orderId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/OrderStatusUpdate"
+      responses:
+        "200":
+          description: Status updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Order"
+
+  /orders/{orderId}/accept:
+    post:
+      operationId: acceptOrder
+      tags: [orders]
+      summary: Driver accepts a pending order (atomic, prevents collision)
+      parameters:
+        - name: orderId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AcceptOrderInput"
+      responses:
+        "200":
+          description: Order accepted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Order"
+        "409":
+          description: Order already taken by another driver
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /orders/active:
+    get:
+      operationId: getActiveOrders
+      tags: [orders]
+      summary: Get all pending orders filtered by driver commune
+      parameters:
+        - name: driverId
+          in: query
+          required: false
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Active orders list
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Order"
+
+  /orders/summary:
+    get:
+      operationId: getOrdersSummary
+      tags: [orders]
+      summary: Get orders summary statistics
+      responses:
+        "200":
+          description: Orders summary
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OrdersSummary"
+
+  /driver/status:
+    get:
+      operationId: getDriverStatus
+      tags: [driver]
+      summary: Get all driver statuses
+      responses:
+        "200":
+          description: Driver statuses
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/DriverStatus"
+    post:
+      operationId: updateDriverStatus
+      tags: [driver]
+      summary: Update driver availability status
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/DriverStatusInput"
+      responses:
+        "200":
+          description: Status updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DriverStatus"
+
+  /driver/{driverId}/subscription:
+    get:
+      operationId: getDriverSubscription
+      tags: [driver]
+      summary: Get latest subscription payment status for driver
+      parameters:
+        - name: driverId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Latest subscription payment or null
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SubscriptionPayment"
+        "404":
+          description: No payment found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+    post:
+      operationId: submitSubscriptionReceipt
+      tags: [driver]
+      summary: Submit a subscription payment receipt
+      parameters:
+        - name: driverId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SubmitReceiptInput"
+      responses:
+        "201":
+          description: Receipt submitted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SubscriptionPayment"
+        "400":
+          description: Invalid input
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /driver/{driverId}/account:
+    get:
+      operationId: getDriverAccount
+      tags: [driver]
+      summary: Get driver account status and subscription info
+      parameters:
+        - name: driverId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Driver account info
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DriverAccount"
+        "404":
+          description: Driver not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+    patch:
+      operationId: updateDriverAccount
+      tags: [driver]
+      summary: Update driver account status or subscription (admin)
+      parameters:
+        - name: driverId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateDriverAccountInput"
+      responses:
+        "200":
+          description: Driver account updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DriverAccount"
+        "400":
+          description: Invalid input
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Driver not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /driver/{driverId}/docs:
+    post:
+      operationId: submitDriverDocs
+      tags: [driver]
+      summary: Save driver verification document URLs (truck video, photos, license)
+      parameters:
+        - name: driverId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/DriverDocsInput"
+      responses:
+        "200":
+          description: Documents saved
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DriverDocsResponse"
+        "400":
+          description: Invalid input
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Driver not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /driver/{driverId}/orders:
+    get:
+      operationId: getDriverOrders
+      tags: [driver]
+      summary: Get orders assigned to a specific driver
+      parameters:
+        - name: driverId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Driver's assigned orders
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Order"
+
+components:
+  schemas:
+    HealthStatus:
+      type: object
+      properties:
+        status:
+          type: string
+      required:
+        - status
+
+    ErrorResponse:
+      type: object
+      properties:
+        error:
+          type: string
+      required:
+        - error
+
+    RegisterInput:
+      type: object
+      required: [name, email, password, phone, userType, wilaya, commune]
+      properties:
+        name:
+          type: string
+        email:
+          type: string
+        password:
+          type: string
+        phone:
+          type: string
+        userType:
+          type: string
+          enum: ["مستهلك", "سائق"]
+        wilaya:
+          type: string
+        commune:
+          type: string
+
+    RegisterRequestResponse:
+      type: object
+      required: [message, email]
+      properties:
+        message:
+          type: string
+        email:
+          type: string
+
+    VerifyOtpInput:
+      type: object
+      required: [email, otp]
+      properties:
+        email:
+          type: string
+        otp:
+          type: string
+
+    LoginInput:
+      type: object
+      required: [email, password]
+      properties:
+        email:
+          type: string
+        password:
+          type: string
+
+    AuthResponse:
+      type: object
+      required: [userId, name, email, userType]
+      properties:
+        userId:
+          type: string
+        name:
+          type: string
+        email:
+          type: string
+        userType:
+          type: string
+
+    OrderInput:
+      type: object
+      required: [userId, waterVolume, barrelCount, totalPrice]
+      properties:
+        userId:
+          type: string
+        waterVolume:
+          type: string
+        barrelCount:
+          type: integer
+        totalPrice:
+          type: number
+        latitude:
+          type: ["number", "null"]
+        longitude:
+          type: ["number", "null"]
+
+    AcceptOrderInput:
+      type: object
+      required: [driverId]
+      properties:
+        driverId:
+          type: string
+
+    OrderStatusUpdate:
+      type: object
+      required: [status]
+      properties:
+        status:
+          type: string
+          enum: ["معلق", "قيد التوصيل", "وصل السائق", "تم التوصيل"]
+
+    Order:
+      type: object
+      required: [id, userId, waterVolume, barrelCount, totalPrice, status, createdAt]
+      properties:
+        id:
+          type: string
+        userId:
+          type: string
+        driverId:
+          type: ["string", "null"]
+        userName:
+          type: ["string", "null"]
+        userPhone:
+          type: ["string", "null"]
+        waterVolume:
+          type: string
+        barrelCount:
+          type: integer
+        totalPrice:
+          type: number
+        latitude:
+          type: ["number", "null"]
+        longitude:
+          type: ["number", "null"]
+        status:
+          type: string
+        createdAt:
+          type: string
+
+    OrdersSummary:
+      type: object
+      required: [total, pending, inDelivery, delivered, totalRevenue]
+      properties:
+        total:
+          type: integer
+        pending:
+          type: integer
+        inDelivery:
+          type: integer
+        delivered:
+          type: integer
+        totalRevenue:
+          type: number
+
+    DriverStatus:
+      type: object
+      required: [driverId, driverName, currentStatus, updatedAt]
+      properties:
+        driverId:
+          type: string
+        driverName:
+          type: string
+        currentStatus:
+          type: string
+        updatedAt:
+          type: string
+
+    DriverStatusInput:
+      type: object
+      required: [driverId, currentStatus]
+      properties:
+        driverId:
+          type: string
+        currentStatus:
+          type: string
+          enum: ["حاضر", "استراحة", "مغلق"]
+
+    DriverAccount:
+      type: object
+      required: [accountStatus, subscriptionExpired]
+      properties:
+        accountStatus:
+          type: string
+          enum: ["pending", "active"]
+        subscriptionExpiresAt:
+          type: ["string", "null"]
+        subscriptionExpired:
+          type: boolean
+
+    UpdateDriverAccountInput:
+      type: object
+      properties:
+        accountStatus:
+          type: string
+          enum: ["pending", "active"]
+        subscriptionExpiresAt:
+          type: ["string", "null"]
+
+    SubscriptionPayment:
+      type: object
+      required: [id, driverId, status, createdAt]
+      properties:
+        id:
+          type: string
+        driverId:
+          type: string
+        receiptImage:
+          type: string
+        status:
+          type: string
+          enum: ["pending", "approved", "rejected"]
+        adminNotes:
+          type: ["string", "null"]
+        createdAt:
+          type: string
+        reviewedAt:
+          type: ["string", "null"]
+
+    SubmitReceiptInput:
+      type: object
+      required: [receiptImage]
+      properties:
+        receiptImage:
+          type: string
+
+    DriverDocsInput:
+      type: object
+      required: [truckFrontPhotoUrl, driverLicenseUrl]
+      properties:
+        truckFrontPhotoUrl:
+          type: string
+        driverLicenseUrl:
+          type: string
+        truckVideoUrl:
+          type: string
+          description: "اختياري — لم يعد مطلوباً (تمت إزالة فيديو التحقق)"
+        truckSidePhotoUrl:
+          type: string
+          description: "اختياري — لم يعد مطلوباً (تمت إزالة صورة الجانب)"
+
+    DriverDocsResponse:
+      type: object
+      required: [driverId]
+      properties:
+        driverId:
+          type: string
+        truckVideoUrl:
+          type: ["string", "null"]
+        truckFrontPhotoUrl:
+          type: ["string", "null"]
+        truckSidePhotoUrl:
+          type: ["string", "null"]
+        driverLicenseUrl:
+          type: ["string", "null"]
