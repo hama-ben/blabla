@@ -31,7 +31,18 @@ export function useAnnouncements(userId: string | null, userType: "driver" | "cu
     if (!userId) return;
     try {
       const data = await customFetch<Announcement[]>("/api/announcements");
-      setAnnouncements(data ?? []);
+
+      // Defense-in-depth: even if the server returns rows it shouldn't have,
+      // only keep rows that are either:
+      //   (a) a broadcast to this user's type (Everyone / Drivers / Customers / etc.)
+      //   (b) targeted exactly at this user's id
+      // This prevents a backend bug or misconfigured RLS from leaking another
+      // driver's private notifications (document approval, payment, etc.) to us.
+      const safe = (data ?? []).filter(a =>
+        matchesAudience(a.targetAudience, userType) || a.targetAudience === userId
+      );
+
+      setAnnouncements(safe);
     } catch {
       // silently ignore — auth not ready yet or network error
     }
