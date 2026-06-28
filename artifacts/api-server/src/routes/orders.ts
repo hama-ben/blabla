@@ -77,7 +77,9 @@ router.post("/orders", async (req, res): Promise<void> => {
     return;
   }
 
-  const { userId, waterVolume, barrelCount, totalPrice, latitude, longitude } = parsed.data;
+  const { waterVolume, barrelCount, totalPrice, latitude, longitude } = parsed.data;
+  // Always use the authenticated user's ID — never trust client-supplied userId
+  const userId = req.auth!.userId;
 
   // ── Daily order limit — customers only, drivers are not restricted ───────────
   if (req.auth?.userType === "مستهلك") {
@@ -407,11 +409,9 @@ router.delete("/orders/:orderId", async (req, res): Promise<void> => {
 });
 
 router.get("/orders/:userId", async (req, res): Promise<void> => {
-  const params = GetUserOrdersParams.safeParse(req.params);
-  if (!params.success) {
-    res.status(400).json({ error: params.error.message });
-    return;
-  }
+  // Enforce ownership: authenticated user can only fetch their own orders.
+  // Ignore the :userId path param and use the verified auth identity instead.
+  const userId = req.auth!.userId;
 
   const driverUsers = db
     .select({ id: usersTable.id, name: usersTable.name, phone: usersTable.phone })
@@ -438,7 +438,7 @@ router.get("/orders/:userId", async (req, res): Promise<void> => {
     .from(ordersTable)
     .leftJoin(usersTable, eq(ordersTable.userId, usersTable.id))
     .leftJoin(driverUsers, eq(ordersTable.driverId, driverUsers.id))
-    .where(eq(ordersTable.userId, params.data.userId))
+    .where(eq(ordersTable.userId, userId))
     .orderBy(desc(ordersTable.createdAt));
 
   res.json(orders.map(mapOrder));

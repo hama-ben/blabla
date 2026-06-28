@@ -1,11 +1,12 @@
 import { Router, type IRouter } from "express";
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { db, savedLocationsTable } from "@workspace/db";
 
 const router: IRouter = Router();
 
-router.get("/locations/:userId", async (req, res): Promise<void> => {
-  const { userId } = req.params;
+// GET /locations — returns the authenticated user's saved locations only
+router.get("/locations", async (req, res): Promise<void> => {
+  const userId = req.auth!.userId;
   const locations = await db
     .select()
     .from(savedLocationsTable)
@@ -23,8 +24,9 @@ router.get("/locations/:userId", async (req, res): Promise<void> => {
   );
 });
 
-router.post("/locations/:userId", async (req, res): Promise<void> => {
-  const { userId } = req.params;
+// POST /locations — creates a location owned by the authenticated user
+router.post("/locations", async (req, res): Promise<void> => {
+  const userId = req.auth!.userId;
   const { label, latitude, longitude } = req.body as {
     label?: string; latitude?: number; longitude?: number;
   };
@@ -54,9 +56,24 @@ router.post("/locations/:userId", async (req, res): Promise<void> => {
   });
 });
 
+// DELETE /locations/:locationId — only the owner can delete their location
 router.delete("/locations/:locationId", async (req, res): Promise<void> => {
   const { locationId } = req.params;
-  await db.delete(savedLocationsTable).where(eq(savedLocationsTable.id, locationId));
+  const userId = req.auth!.userId;
+
+  const deleted = await db
+    .delete(savedLocationsTable)
+    .where(and(
+      eq(savedLocationsTable.id, locationId),
+      eq(savedLocationsTable.userId, userId),
+    ))
+    .returning({ id: savedLocationsTable.id });
+
+  if (deleted.length === 0) {
+    res.status(404).json({ error: "الموقع غير موجود أو لا تملك صلاحية حذفه" });
+    return;
+  }
+
   res.json({ success: true });
 });
 
