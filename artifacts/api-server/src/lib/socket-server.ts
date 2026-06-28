@@ -5,10 +5,11 @@
  *  - Every connection is authenticated at handshake time via io.use() middleware.
  *    The client passes { auth: { sessionToken } } in the Socket.io handshake
  *    where sessionToken is the Supabase JWT access token.
- *  - The JWT is decoded locally (no network round-trip) to extract userId and
- *    userType from app_metadata. Expiry is checked at handshake time.
+ *  - The token is verified cryptographically via supabase.auth.getUser(token),
+ *    which validates JWT signature, issuer, audience, and expiry server-side.
+ *    No local base64 decoding is used — forged tokens are rejected.
  *  - After authentication, socket.data.userId and socket.data.userType are set
- *    from the validated token, NOT from any client-supplied event payload.
+ *    from the verified Supabase user object, NOT from any client-supplied payload.
  *
  * Room layout:
  *  - "user:<userId>"  — targeted consumer/driver events (order status changes).
@@ -17,26 +18,10 @@
 
 import { Server as SocketIOServer, type Socket } from "socket.io";
 import type { Server as HttpServer } from "http";
+import { getSupabaseAuth } from "./supabase-server";
 import { logger } from "./logger";
 
 let io: SocketIOServer | null = null;
-
-interface JwtPayload {
-  sub?: string;
-  exp?: number;
-  app_metadata?: { userType?: string };
-  user_metadata?: { userType?: string };
-}
-
-function decodeJwt(token: string): JwtPayload | null {
-  try {
-    const parts = token.split(".");
-    if (parts.length !== 3) return null;
-    return JSON.parse(Buffer.from(parts[1], "base64url").toString("utf8")) as JwtPayload;
-  } catch {
-    return null;
-  }
-}
 
 export function initSocketServer(httpServer: HttpServer): SocketIOServer {
   io = new SocketIOServer(httpServer, {
@@ -51,7 +36,7 @@ export function initSocketServer(httpServer: HttpServer): SocketIOServer {
 
   // ── Handshake authentication middleware ───────────────────────────────────
   // Runs before any event handler. Rejects unauthenticated connections.
-  io.use((socket: Socket, next) => {
+  io.use(async (socket: Socket, next) => {
     const token = socket.handshake.auth?.sessionToken as string | undefined;
 
     if (!token) {
@@ -59,22 +44,25 @@ export function initSocketServer(httpServer: HttpServer): SocketIOServer {
       return next(new Error("UNAUTHORIZED"));
     }
 
-    const payload = decodeJwt(token);
-
-    if (!payload || !payload.sub) {
-      logger.warn({ socketId: socket.id }, "Socket rejected: invalid JWT");
-      return next(new Error("UNAUTHORIZED"));
+    const supabase = getSupabaseAuth();
+    if (!supabase) {
+      logger.error("Socket auth: Supabase client unavailable — rejecting all connections");
+      return next(new Error("SERVICE_UNAVAILABLE"));
     }
 
-    if (payload.exp && payload.exp < Math.floor(Date.now() / 1000)) {
-      logger.warn({ socketId: socket.id }, "Socket rejected: JWT expired");
+    const { data: { user }, error } = await supabase.auth.getUser(token);
+
+    if (error || !user) {
+      logger.warn({ socketId: socket.id, err: error?.message }, "Socket rejected: invalid or expired JWT");
       return next(new Error("UNAUTHORIZED"));
     }
 
     const userType =
-      payload.app_metadata?.userType ?? payload.user_metadata?.userType ?? "";
+      (user.app_metadata as Record<string, unknown>)?.userType as string ??
+      (user.user_metadata as Record<string, unknown>)?.userType as string ??
+      "";
 
-    socket.data.userId   = payload.sub;
+    socket.data.userId   = user.id;
     socket.data.userType = userType;
 
     next();

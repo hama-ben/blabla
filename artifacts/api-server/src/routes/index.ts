@@ -17,7 +17,7 @@ import { requireAuth } from "../middlewares/require-auth";
 
 import healthRouter                                          from "./health";
 import authRouter                                            from "./auth";
-import pushRouter                                            from "./push";
+import { pushPublicRouter, pushProtectedRouter }             from "./push";
 import adminRouter                                           from "./admin";
 import driverRouter                                          from "./driver";
 import ordersRouter                                          from "./orders";
@@ -29,19 +29,20 @@ import { supportPublicRouter, supportProtectedRouter }       from "./support";
 const router: IRouter = Router();
 
 // ── 1. Public (no session required) ──────────────────────────────────────────
-router.use(healthRouter);         // GET /  GET /healthz  GET /health
+router.use(healthRouter);         // GET /  GET /healthz
 router.use(authRouter);           // POST /auth/login  /auth/register-request  etc.
-router.use(pushRouter);           // GET /push/vapid-public-key  POST /push/subscribe
+router.use(pushPublicRouter);     // GET /push/vapid-public-key (public key is not a secret)
 router.use(adminRouter);          // POST /admin/drivers/:id/approve  etc. (X-Admin-Key auth)
 router.use(supportPublicRouter);  // POST /support/message (public anon) + /support/contact
 
 // ── 2. Session validation gate ────────────────────────────────────────────────
 // All routes registered after this line require a valid Supabase JWT in the
-// Authorization: Bearer header. The JWT is issued by Supabase Auth on login/
-// OTP verification and validated by requireAuth middleware.
+// Authorization: Bearer header. The JWT is verified cryptographically by
+// requireAuth via supabase.auth.getUser(token).
 router.use(requireAuth);
 
 // ── 3. Protected routes ───────────────────────────────────────────────────────
+router.use(pushProtectedRouter);  // POST /push/subscribe (auth userId enforced)
 router.use(driverRouter);
 router.use(ordersRouter);
 router.use(ratingsRouter);

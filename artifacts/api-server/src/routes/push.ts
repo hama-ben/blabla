@@ -1,13 +1,13 @@
 /**
- * POST /api/push/subscribe
- * Saves a Web Push PushSubscription object for a userId.
- * One row per userId — upsert so re-subscribes (e.g. after permission reset)
- * replace the stale endpoint rather than accumulating dead ones.
+ * Push notification routes — split into public and protected.
  *
- * GET /api/push/vapid-public-key
- * Returns the VAPID public key so the client can subscribe without
- * embedding it at build time (useful for server-rendered / native builds).
- * This route is intentionally public — the key is not a secret.
+ * pushPublicRouter  (no auth required):
+ *   GET /push/vapid-public-key — VAPID public key is not a secret; safe to expose publicly.
+ *
+ * pushProtectedRouter  (requireAuth required — mounted AFTER requireAuth in index.ts):
+ *   POST /push/subscribe — registers a Web Push subscription for the AUTHENTICATED user.
+ *     userId is always taken from req.auth (set by requireAuth), never from the request body.
+ *     One row per userId: upsert replaces stale endpoint on re-subscribe.
  */
 
 import { Router, type IRouter } from "express";
@@ -15,21 +15,24 @@ import { db, pushSubscriptionsTable } from "@workspace/db";
 import { eq } from "drizzle-orm";
 import { sql } from "drizzle-orm";
 
-const router: IRouter = Router();
+// ── Public router ─────────────────────────────────────────────────────────────
+const pushPublicRouter: IRouter = Router();
 
-router.get("/push/vapid-public-key", (_req, res) => {
+pushPublicRouter.get("/push/vapid-public-key", (_req, res) => {
   const key = process.env.VAPID_PUBLIC_KEY ?? "";
   res.json({ publicKey: key });
 });
 
-router.post("/push/subscribe", async (req, res): Promise<void> => {
-  const { userId, subscription } = req.body as {
-    userId?: string;
-    subscription?: unknown;
-  };
+// ── Protected router (mounted after requireAuth) ───────────────────────────────
+const pushProtectedRouter: IRouter = Router();
 
-  if (!userId || !subscription || typeof subscription !== "object") {
-    res.status(400).json({ error: "userId and subscription are required" });
+pushProtectedRouter.post("/push/subscribe", async (req, res): Promise<void> => {
+  // Always derive userId from the verified auth token — never trust the request body.
+  const userId = req.auth!.userId;
+  const { subscription } = req.body as { subscription?: unknown };
+
+  if (!subscription || typeof subscription !== "object") {
+    res.status(400).json({ error: "subscription is required" });
     return;
   }
 
@@ -53,4 +56,4 @@ router.post("/push/subscribe", async (req, res): Promise<void> => {
   res.status(201).json({ ok: true });
 });
 
-export default router;
+export { pushPublicRouter, pushProtectedRouter };
