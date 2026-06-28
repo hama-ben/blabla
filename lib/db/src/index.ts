@@ -4,14 +4,16 @@ import * as schema from "./schema";
 
 const { Pool } = pg;
 
-// Supabase Postgres is the permanent primary database.
-// SUPABASE_DB_URL must be set — no fallback to any other connection.
-const rawUrl = process.env.SUPABASE_DB_URL;
+// Accept both the correct name and the legacy typo that may exist on Render.
+// Priority: SUPABASE_DB_URL → SUPABASE_BD_URL (typo fallback) → crash.
+const rawUrl =
+  process.env.SUPABASE_DB_URL ??
+  process.env.SUPABASE_BD_URL;
 
 if (!rawUrl) {
   throw new Error(
-    "[db] SUPABASE_DB_URL is not set — database operations cannot start. " +
-    "Set this secret to the direct Supabase Postgres connection string."
+    "[db] Neither SUPABASE_DB_URL nor SUPABASE_BD_URL is set. " +
+    "Set SUPABASE_DB_URL to the direct Supabase Postgres connection string."
   );
 }
 
