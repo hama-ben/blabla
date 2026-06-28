@@ -4,13 +4,24 @@ import * as schema from "./schema";
 
 const { Pool } = pg;
 
-if (!process.env.DATABASE_URL) {
+// Supabase Postgres is the permanent primary database.
+// SUPABASE_DB_URL must be set — no fallback to any other connection.
+const rawUrl = process.env.SUPABASE_DB_URL;
+
+if (!rawUrl) {
   throw new Error(
-    "DATABASE_URL must be set. Did you forget to provision a database?",
+    "[db] SUPABASE_DB_URL is not set — database operations cannot start. " +
+    "Set this secret to the direct Supabase Postgres connection string."
   );
 }
 
-export const pool = new Pool({ connectionString: process.env.DATABASE_URL });
+// Always SSL for Supabase — rejectUnauthorized:false is intentional
+// (TLS tunnel enforced by the connection string; we need encryption, not cert pinning).
+export const pool = new Pool({
+  connectionString: rawUrl,
+  ssl: { rejectUnauthorized: false },
+});
+
 export const db = drizzle(pool, { schema });
 
 export * from "./schema";
