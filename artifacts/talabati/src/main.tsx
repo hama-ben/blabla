@@ -5,10 +5,15 @@ import { setBaseUrl, setDeviceIdGetter, setTokenRefresher } from "@workspace/api
 import { getDeviceId } from "@/lib/device-id";
 import { tokenRefresher } from "@/lib/token-refresh";
 
-const apiBase = import.meta.env.VITE_API_BASE_URL as string | undefined;
-if (apiBase) {
-  setBaseUrl(apiBase);
-}
+// Always point to the Render backend. VITE_API_BASE_URL overrides this at
+// build time (e.g. for staging), but falls back to the production Render URL
+// so Netlify/Vercel deploys work even when the env var is absent from the
+// build environment.
+const PRODUCTION_API_URL = "https://mizu-nyv1.onrender.com";
+const apiBase =
+  (import.meta.env.VITE_API_BASE_URL as string | undefined) ||
+  PRODUCTION_API_URL;
+setBaseUrl(apiBase);
 
 setDeviceIdGetter(getDeviceId);
 
